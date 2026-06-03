@@ -110,34 +110,38 @@ async def get_session_id(http_session, session_url, previous_session_id):
     if not session_url:
         return previous_session_id
         
+    # 1. URL ထဲတွင် sessionId= ပါဝင်ပါက အရင်ဆုံး တိုက်ရိုက် ထုတ်ယူသည်
     url_match = re.search(r"[?&]sessionId=([a-zA-Z0-9\.\-_]+)", session_url)
     if url_match:
         return url_match.group(1).strip()
         
-    if "ruijienetworks.com" in session_url:
-        return "cloud_session_active"
-
+    # 2. အကယ်၍ url ထဲတွင် မပါက ကွန်ရက်သို့ လှမ်းခေါ်ပြီး တကယ့် Session ID ကို ထုတ်ယူရန် ကြိုးစားသည်
     mac = get_mac()
     test_url = replace_mac(session_url, new_mac=mac)
-    
-    # Redmi 5X (Android 8.1.0; MIUI 10) ၏ တရားဝင် User-Agent ကို အသုံးပြုထားပါသည်
+    redmi_ua = "Mozilla/5.0 (Linux; Android 8.1.0; Redmi 5X Build/OPM1.171019.019; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/71.0.3578.99 Mobile Safari/537.36"
     headers = {
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
-        "User-Agent": "Mozilla/5.0 (Linux; Android 8.1.0; Redmi 5X Build/OPM1.171019.019; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/71.0.3578.99 Mobile Safari/537.36",
+        "User-Agent": redmi_ua,
     }
     try:
         async with http_session.get(test_url, headers=headers, allow_redirects=True, timeout=3) as req:
             response = str(req.url)
+            # Redirect ဖြစ်သွားသော URL အသစ်ထဲတွင် sessionId ပါမပါ ထပ်မံ ရှာဖွေသည်
             session_id = re.search(r"[?&]sessionId=([a-zA-Z0-9\.\-_]+)", response)
             if session_id:
                 return session_id.group(1)
             
             html = await req.text()
+            # HTML ကုဒ်များထဲတွင် မြှုပ်နှံထားသော sessionId ကို စစ်ထုတ်သည်
             sid_match = re.search(r'sessionId\s*[:=]\s*["\']([^"\']+)["\']', html)
             if sid_match:
                 return sid_match.group(1)
     except:
         pass
+        
+    # 3. အကယ်၍ လုံးဝ ရှာမတွေ့တော့မှသာ 'cloud_session_active' သို့မဟုတ် ယခင် ID ဟောင်းကို သုံးမည်
+    if "ruijienetworks.com" in session_url:
+        return "cloud_session_active"
     return previous_session_id
 # ==================== RANDOM GENERATORS ====================
 def generate_random_voucher(mode, length, history_set, in_running):
