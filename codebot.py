@@ -67,7 +67,7 @@ class UserSession:
         self.current_length = 6
         self.start_time = None
         self.in_running = set()
-        self.concurrency_limit = 200  # CPU Overload ကာကွယ်ရန် ထိန်းညှိမှု
+        self.concurrency_limit = 60  # CPU Overload ကာကွယ်ရန် ထိန်းညှိမှု
         self.status_message_id = None
 
     def get_history_set(self):
