@@ -474,23 +474,27 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ ပုံစံမှားယွင်းနေပါသည်။ 'ID|နာရီအရေအတွက်|ကုဒ်ရှာဖွေမှုကန့်သတ်ချက်' ပုံစံအတိုင်း ပြန်ရိုက်ပါ။", reply_markup=admin_menu())
         return
 
-    # Portal Link ကို လက်ခံမှတ်သားခြင်း
+        # Portal Link ကို လက်ခံမှတ်သားခြင်း (Crash မဖြစ်အောင် ရာနှုန်းပြည့် လုံခြုံရေး အကာအကွယ် ထည့်ထားသည်)
     if state == "waiting_portal_link":
         user_states.pop(user_id, None)
         us = get_user_session(user_id)
         us.portal_url = text.strip()
         
-        host_match = re.search(r'(https?://[^/]+)', us.portal_url)
-        if host_match:
-            base_domain = host_match.group(1)
-            if "ruijienetworks.com" in base_domain:
-                us.base_url = base_domain
-            else:
-                if ":" in base_domain.replace("http://", "").replace("https://", ""):
+        try:
+            host_match = re.search(r'(https?://[^/]+)', us.portal_url)
+            if host_match:
+                base_domain = host_match.group(1)
+                if "ruijienetworks.com" in base_domain:
                     us.base_url = base_domain
                 else:
-                    us.base_url = f"{base_domain}:2060"
-        else:
+                    if ":" in base_domain.replace("http://", "").replace("https://", ""):
+                        us.base_url = base_domain
+                    else:
+                        us.base_url = f"{base_domain}:2060"
+            else:
+                us.base_url = "https://ruijienetworks.com"
+        except Exception as e:
+            logger.error(f"URL Parsing Error: {e}")
             us.base_url = "https://ruijienetworks.com"
             
         menu_to_show = admin_menu() if is_admin(user_id) else user_menu()
