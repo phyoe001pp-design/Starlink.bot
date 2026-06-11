@@ -51,7 +51,7 @@ _p_ = "\033[1;35m"
 _G_S_C_ = 0
 
 # 🔴 လူကြီးမင်း၏ Telegram Bot Token ကို အောက်ပါနေရာတွင် ထည့်ပါ
-BOT_TOKEN = "8573033347:AAHuw3HPt1hGoVGOmERsATd8H_EuvWb2Wkk"
+BOT_TOKEN = "8824622648:AAHV1DiDPcONd93dKPrhSoIMi0iKcJ_vbHo"
 
 # ==================== LICENSE SYSTEM (DATABASE) ====================
 def init_db():
