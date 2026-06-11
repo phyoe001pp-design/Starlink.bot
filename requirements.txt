@@ -1,0 +1,6 @@
+python-telegram-bot
+aiohttp
+requests
+pycryptodome
+ping3
+ntplib
