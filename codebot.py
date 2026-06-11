@@ -379,9 +379,7 @@ async def bot_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text(f"❌ ဖျက်သိမ်းရာတွင် အမှားရှိခဲ့သည်: {str(e)}")
             
     else:
-        await query.edit_message_text(f"⚙️ လုပ်ဆောင်ချက် **'{query.data}'** ကို ရွေးချယ်ထားပါသည်။")
-
-async def bot_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+      async def bot_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
     
     # ၁။ အကယ်၍ ပို့လိုက်တဲ့စာသားဟာ http သို့မဟုတ် https လင့်ခ် ဖြစ်နေလျှင်
@@ -404,6 +402,34 @@ async def bot_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
                 await update.message.reply_text("⚠️ Link ကို သိမ်းလိုက်သော်လည်း လင့်ခ်ထဲတွင် `sessionId=` တန်ဖိုး ရှာမတွေ့ပါ။ ပြန်လည်စစ်ဆေးပါ။")
         except Exception as e:
             await update.message.reply_text(f"❌ Link သိမ်းဆည်းရာတွင် အမှားရှိခဲ့သည်: {str(e)}")
+            
+    # ၂။ အကယ်၍ ပို့လိုက်တဲ့စာသားဟာ ID|နာရီ|ပုံစံ ရွေးချယ်မှု ဖြစ်နေလျှင် (ဥပမာ - 6658845504|1|6mix)
+    elif re.match(r"^\d+\|\d+\|[a-zA-Z0-9]+$", text):
+        uid, hours, mode_choice = text.split("|")
+        expiry = (datetime.now() + timedelta(hours=int(hours))).isoformat()
+        
+        conn = sqlite3.connect("credits.db")
+        c = conn.cursor()
+        c.execute("INSERT OR REPLACE INTO devices VALUES (?, ?, ?)", (f"DEV-{uid}", float(hours), expiry))
+        conn.commit()
+        conn.close()
+        
+        await update.message.reply_text(
+            f"✅ **ခွင့်ပြုချက် အောင်မြင်ပါသည်!**\n\n"
+            f"👤 **User ID:** `{uid}`\n"
+            f"⏰ **သက်တမ်း:** {hours} နာရီ\n"
+            f"🎯 **ရွေးချယ်မှုပုံစံ:** `{mode_choice}`", 
+            parse_mode="Markdown"
+        )
+        
+        # အဆင့်မြှင့်တင်ထားသော Engine သစ်ထဲသို့ mode_str လှမ်းပို့၍ မောင်းနှင်ခြင်း
+        engine = _V_C_(mode_str=mode_choice)
+        await engine.execute(update=update)
+        
+    # ၃။ အပေါ်က ပုံစံနှစ်ခုလုံးနဲ့ မကိုက်ညီလျှင်
+    else:
+        await update.message.reply_text("❌ စာသားပုံစံ မမှန်ကန်ပါ။\n• Portal Link အပြည့်အစုံ ပို့ပေးပါ (သို့မဟုတ်)\n• ဥပမာအတိုင်း `ID|နာရီ|ပုံစံ` ပို့ပေးပါ။\n*(ပုံစံနေရာတွင် `6d`, `7d`, `9d`, `6mix` စသည်ဖြင့် ရွေးချယ်နိုင်သည်)*")
+
             
     # ၂။ အကယ်၍ ပို့လိုက်တဲ့စာသားဟာ ID|နာရီ|ကန့်သတ်ချက် ပုံစံ ဖြစ်နေလျှင်
     elif re.match(r"^\d+\|\d+\|\d+$", text):
