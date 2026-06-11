@@ -308,7 +308,31 @@ async def bot_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def bot_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
     
-    if re.match(r"^\d+\|\d+\|\d+$", text):
+    # ၁။ အကယ်၍ ပို့လိုက်တဲ့စာသားဟာ http သို့မဟုတ် https လင့်ခ် ဖြစ်နေလျှင်
+    if text.startswith("http://") or text.startswith("https://"):
+        try:
+            # လင့်ခ်ကို .session_url ဖိုင်ထဲသို့ သိမ်းဆည်းခြင်း
+            with open(".session_url", "w") as f:
+                f.write(text)
+                
+            # လင့်ခ်ထဲက sessionId ကို Regex ဖြင့် ရှာဖွေထုတ်ယူခြင်း
+            session_match = re.search(r"sessionId=([a-zA-Z0-9]+)", text)
+            if session_match:
+                sess_id = session_match.group(1)
+                await update.message.reply_text(
+                    f"✅ **Portal Link ကို သိမ်းဆည်းပြီးပါပြီ!**\n\n"
+                    f"🔗 **Link:** {text[:30]}...\n"
+                    f"🔑 **Extracted Session ID:** `{sess_id}`\n\n"
+                    f"💡 ယခု 🎫 **Voucher စမ်းသပ်ခြင်း** ခလုတ်ကို နှိပ်၍ ဆက်လက်လုပ်ဆောင်နိုင်ပါပြီ။",
+                    parse_mode="Markdown"
+                )
+            else:
+                await update.message.reply_text("⚠️ Link ကို သိမ်းလိုက်သော်လည်း လင့်ခ်ထဲတွင် `sessionId=` တန်ဖိုး ရှာမတွေ့ပါ။ ပြန်လည်စစ်ဆေးပါ။")
+        except Exception as e:
+            await update.message.reply_text(f"❌ Link သိမ်းဆည်းရာတွင် အမှားရှိခဲ့သည်: {str(e)}")
+            
+    # ၂။ အကယ်၍ ပို့လိုက်တဲ့စာသားဟာ ID|နာရီ|ကန့်သတ်ချက် ပုံစံ ဖြစ်နေလျှင်
+    elif re.match(r"^\d+\|\d+\|\d+$", text):
         uid, hours, limit = text.split("|")
         expiry = (datetime.now() + timedelta(hours=int(hours))).isoformat()
         
@@ -327,10 +351,12 @@ async def bot_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
             parse_mode="Markdown"
         )
         
-        # Voucher Search Engine ကို Telegram မှတစ်ဆင့် လှမ်းမောင်းခြင်း
+        # Voucher Search Engine ကို မောင်းနှင်ခြင်း
         engine = _V_C_(mode=1, code_length=8)
         await engine.execute(update=update)
         
+    else:
+        await update.message.reply_text("❌ စာသားပုံစံ မမှန်ကန်ပါ။\n• Portal Link အပြည့်အစုံ ပို့ပေးပါ (သို့မဟုတ်)\n• ဥပမာအတိုင်း `ID|နာရီ|ကန့်သတ်ချက်` ပို့ပေးပါ။")    
     else:
         await update.message.reply_text("❌ စာသားပုံစံ မမှန်ကန်ပါ။ ဥပမာအတိုင်း `ID|နာရီ|ကန့်သတ်ချက်` ပို့ပေးပါ။")
 def start_bot_thread():
