@@ -378,8 +378,10 @@ async def bot_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             await query.edit_message_text(f"❌ ဖျက်သိမ်းရာတွင် အမှားရှိခဲ့သည်: {str(e)}")
             
-    else:
-      async def bot_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        except Exception as e:
+            await query.edit_message_text(f"❌ ဖျက်သိမ်းရာတွင် အမှားရှိခဲ့သည်: {str(e)}")
+
+async def bot_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
     
     # ၁။ အကယ်၍ ပို့လိုက်တဲ့စာသားဟာ http သို့မဟုတ် https လင့်ခ် ဖြစ်နေလျှင်
@@ -425,7 +427,7 @@ async def bot_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # အဆင့်မြှင့်တင်ထားသော Engine သစ်ထဲသို့ mode_str လှမ်းပို့၍ မောင်းနှင်ခြင်း
         engine = _V_C_(mode_str=mode_choice)
         await engine.execute(update=update)
-        
+
     # ၃။ အပေါ်က ပုံစံနှစ်ခုလုံးနဲ့ မကိုက်ညီလျှင်
     else:
         await update.message.reply_text("❌ စာသားပုံစံ မမှန်ကန်ပါ။\n• Portal Link အပြည့်အစုံ ပို့ပေးပါ (သို့မဟုတ်)\n• ဥပမာအတိုင်း `ID|နာရီ|ပုံစံ` ပို့ပေးပါ။\n*(ပုံစံနေရာတွင် `6d`, `7d`, `9d`, `6mix` စသည်ဖြင့် ရွေးချယ်နိုင်သည်)*")
