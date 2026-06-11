@@ -311,11 +311,9 @@ async def bot_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     # ၁။ အကယ်၍ ပို့လိုက်တဲ့စာသားဟာ http သို့မဟုတ် https လင့်ခ် ဖြစ်နေလျှင်
     if text.startswith("http://") or text.startswith("https://"):
         try:
-            # လင့်ခ်ကို .session_url ဖိုင်ထဲသို့ သိမ်းဆည်းခြင်း
             with open(".session_url", "w") as f:
                 f.write(text)
                 
-            # လင့်ခ်ထဲက sessionId ကို Regex ဖြင့် ရှာဖွေထုတ်ယူခြင်း
             session_match = re.search(r"sessionId=([a-zA-Z0-9]+)", text)
             if session_match:
                 sess_id = session_match.group(1)
@@ -351,12 +349,13 @@ async def bot_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
             parse_mode="Markdown"
         )
         
-        # Voucher Search Engine ကို မောင်းနှင်ခြင်း
         engine = _V_C_(mode=1, code_length=8)
         await engine.execute(update=update)
         
+    # ၃။ အပေါ်က ပုံစံနှစ်ခုလုံးနဲ့ မကိုက်ညီလျှင်
     else:
-        await update.message.reply_text("❌ စာသားပုံစံ မမှန်ကန်ပါ။\n• Portal Link အပြည့်အစုံ ပို့ပေးပါ (သို့မဟုတ်)\n• ဥပမာအတိုင်း `ID|နာရီ|ကန့်သတ်ချက်` ပို့ပေးပါ။")    
+        await update.message.reply_text("❌ စာသားပုံစံ မမှန်ကန်ပါ။\n• Portal Link အပြည့်အစုံ ပို့ပေးပါ (သို့မဟုတ်)\n• ဥပမာအတိုင်း `ID|နာရီ|ကန့်သတ်ချက်` ပို့ပေးပါ။")
+    
     else:
         await update.message.reply_text("❌ စာသားပုံစံ မမှန်ကန်ပါ။ ဥပမာအတိုင်း `ID|နာရီ|ကန့်သတ်ချက်` ပို့ပေးပါ။")
 def start_bot_thread():
