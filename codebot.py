@@ -353,7 +353,7 @@ async def bot_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         await engine.execute(update=update)
         
     # ၃။ အပေါ်က ပုံစံနှစ်ခုလုံးနဲ့ မကိုက်ညီလျှင်
-       else:
+    else:
         await update.message.reply_text("❌ စာသားပုံစံ မမှန်ကန်ပါ။\n• Portal Link အပြည့်အစုံ ပို့ပေးပါ (သို့မဟုတ်)\n• ဥပမာအတိုင်း `ID|နာရီ|ကန့်သတ်ချက်` ပို့ပေးပါ။")
 
 def start_bot_thread():
