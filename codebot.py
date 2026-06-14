@@ -53,7 +53,6 @@ class DataManager:
                 json.dump(self.data, f, indent=4)
         except Exception as e:
             print(f"Error saving data: {e}")
-
     def is_authorized(self, user_id):
         if user_id == ADMIN_ID:
             return True
@@ -102,6 +101,7 @@ class DataManager:
         if uid in self.data["users"]:
             del self.data["users"][uid]
         self.save()
+
     def check_and_add_hit(self, user_id):
         if user_id == ADMIN_ID:
             return True
@@ -138,7 +138,6 @@ class DataManager:
             self.save()
             return True
         return False
-
     def get_user_data(self, user_id):
         uid = str(user_id)
         if uid not in self.data["users"]:
@@ -169,6 +168,7 @@ class DataManager:
         if code not in self.data["users"][uid]["success_codes"]:
             self.data["users"][uid]["success_codes"].append(code)
             self.save()
+
     def clear_success_codes(self, user_id):
         uid = str(user_id)
         if uid in self.data["users"] and "success_codes" in self.data["users"][uid]:
@@ -220,7 +220,6 @@ def get_session(user_id) -> UserSession:
     if user_id not in user_sessions:
         user_sessions[user_id] = UserSession(user_id)
     return user_sessions[user_id]
-
 # ---------------------- SCANNING ENGINE ----------------------
 bot = AsyncTeleBot(BOT_TOKEN)
 
@@ -253,6 +252,7 @@ async def get_sid_from_gateway(session, portal_url):
     except Exception as e:
         print(f"Error getting SID from gateway {portal_url}: {e}")
         return None
+
 async def worker_task(user_id, app_session):
     session = get_session(user_id)
     u_data = data_manager.get_user_data(user_id)
@@ -291,7 +291,7 @@ async def worker_task(user_id, app_session):
 
         code = ''.join(random.choices(char_set, k=code_len))
         if code in tried_codes: 
-            await asyncio.sleep(0.001)  # CPU 100% တက်ခြင်းမှ ကာကွယ်ရန် Loop အား အသက်ရှူပေါက်ပေးခြင်း
+            await asyncio.sleep(0.001)
             continue
         tried_codes.add(code)
         data_manager.update_user_tried(user_id, code)
@@ -316,16 +316,15 @@ async def worker_task(user_id, app_session):
                         await bot.send_message(user_id, f"🚫 <b>ယနေ့အတွက် Success Code ရှာဖွေနိုင်မှု ကန့်သတ်ချက် ပြည့်သွားပြီဖြစ်၍ စကင်နာကို ရပ်တန့်လိုက်ပါပြီ။</b>", parse_mode="HTML")
                         break
 
-                if "request limited" in res_text :
+                if "request limited" in res_text:
                     my_sid = None
         except (aiohttp.ClientConnectorError, aiohttp.ClientError):
             my_sid = None
             session.current_url_index += 1
             await asyncio.sleep(1)
-        except Exception as e:
+        except Exception:
             my_sid = None
             await asyncio.sleep(0.5)
-
 async def dashboard_updater(user_id):
     session = get_session(user_id)
     while not session.stop_event.is_set():
@@ -352,9 +351,10 @@ async def dashboard_updater(user_id):
             markup.row(InlineKeyboardButton(text="🛑 STOP & PAUSE SCANNER", callback_data="stop_scan"))
             try:
                 await bot.edit_message_text(chat_id=user_id, message_id=session.status_msg_id, text=text, reply_markup=markup, parse_mode="HTML")
-            except Exception as e:
+            except Exception:
                 pass
         await asyncio.sleep(3)
+
 async def main_scanner_task(user_id):
     connector = aiohttp.TCPConnector(limit=PER_USER_CONCURRENCY, limit_per_host=0, ttl_dns_cache=300, ssl=False)
     async with aiohttp.ClientSession(connector=connector) as app_session:
@@ -363,7 +363,7 @@ async def main_scanner_task(user_id):
         try:
             await asyncio.gather(*tasks)
         except asyncio.CancelledError:
-            pass  # Task မန်နေဂျာကို ဘေးကင်းစွာ ပိတ်သိမ်းရန်
+            pass
 
 # ---------------------- BOT KEYBOARD MENUS ----------------------
 
@@ -416,6 +416,7 @@ async def cmd_start(message):
         reply_markup=get_user_keyboard(user_id),
         parse_mode="HTML"
     )
+# ---------------------- MESSAGE HANDLER FOR ALL INPUTS ----------------------
 @bot.message_handler(content_types=['photo', 'text'])
 async def handle_bot_inputs(message):
     user_id = message.from_user.id
@@ -447,7 +448,6 @@ async def handle_bot_inputs(message):
     if message.content_type == 'text':
         text_data = message.text.strip()
 
-        # Admin Setup Module
         if user_id == ADMIN_ID and "|" in text_data:
             parts = [p.strip() for p in text_data.split("|")]
             if len(parts) == 3:
@@ -464,7 +464,7 @@ async def handle_bot_inputs(message):
                         f"🆔 <b>User ID:</b> <code>{target_id}</code>\n"
                         f"⏳ <b>Expiry:</b> <code>{expiry_result}</code>\n"
                         f"🎯 <b>Daily Limit:</b> <code>{daily_limit} Hits</code>",
-                        reply_markup=get_admin_panel_keyboard(),
+                        reply_markup=get_admin_panel_keyboard() if str(message.chat.id) == str(ADMIN_ID) else None,
                         parse_mode="HTML"
                     )
 
@@ -479,41 +479,35 @@ async def handle_bot_inputs(message):
                             parse_mode="HTML"
                         )
                     except Exception:
-                        await bot.reply_to(message, f"⚠️ User ထံ စာပို့၍မရပါ (Bot အား Start မလုပ်ရသေးပါ)။")
+                        await bot.reply_to(message, "⚠️ User ထံ စာပို့၍မရပါ (Bot အား Start မလုပ်ရသေးပါ)။")
                     return
                 except ValueError:
                     await bot.reply_to(message, "❌ <b>ရိုက်ထည့်သော Format လွဲမှားနေပါသည်။</b> ID နှင့် Limit ကို ကိန်းဂဏန်းများဖြင့်သာ သေချာထည့်ပေးပါ။")
                     return
 
-        # Ban User Mode
         if user_id == ADMIN_ID and session.state == "waiting_for_ban_id":
-            # အကယ်၍ User က ခလုတ်တွေ ပြန်နှိပ်လိုက်ရင် State ကို ဖျက်ပြီး ထွက်ရန်
-            if text_data in ["🔗 ADD PORTAL URL", "📄 MY URLS", "⚙️ SETUP CONFIG MOD", "🚀 START SCAN", "📄 MY SUCCESS CODES", "🔑 ADMIN PANEL", "🔙 BACK TO MAIN", "🔙 BACK", "👥 Admin ခွင့်ပြုပေးထားသော User များ", "🚫 ခွင့်ပြုထားသော user များအား ပယ်ဖျက်ရန်"]:
-                session.state = None
-            else:
-                try:
-                    target_ban_id = int(text_data)
-                    if str(target_ban_id) in data_manager.data["authorized_users"]:
-                        data_manager.deauthorize(target_ban_id)
+            try:
+                target_ban_id = int(text_data)
+                if str(target_ban_id) in data_manager.data["authorized_users"]:
+                    data_manager.deauthorize(target_ban_id)
 
-                        if target_ban_id in user_sessions:
-                            us = user_sessions[target_ban_id]
-                            us.stop_event.set()
-                            if us.scan_task: 
-                                us.scan_task.cancel()
-                            del user_sessions[target_ban_id]
+                    if target_ban_id in user_sessions:
+                        us = user_sessions[target_ban_id]
+                        us.stop_event.set()
+                        if us.scan_task: 
+                            us.scan_task.cancel()
+                        del user_sessions[target_ban_id]
 
-                        await bot.reply_to(message, f"✅ <b>User {target_ban_id} အား အောင်မြင်စွာ ပယ်ဖျက်ပြီးပါပြီ။</b>", reply_markup=get_admin_panel_keyboard(), parse_mode="HTML")
-                    else:
-                        await bot.reply_to(message, "❌ အဆိုပါ ID မှာ ခွင့်ပြုထားသော စာရင်းထဲတွင် မရှိပါ။")
-                except Exception:
-                    await bot.reply_to(message, "❌ တရားဝင်သော numeric ID ကိုသာ ရိုက်ထည့်ပါ။")
-                session.state = None
-                return
+                    await bot.reply_to(message, f"✅ <b>User {target_ban_id} အား အောင်မြင်စွာ ပယ်ဖျက်ပြီးပါပြီ။</b>", reply_markup=get_admin_panel_keyboard(), parse_mode="HTML")
+                else:
+                    await bot.reply_to(message, "❌ အဆိုပါ ID မှာ ခွင့်ပြုထားသော စာရင်းထဲတွင် မရှိပါ။")
+            except Exception:
+                await bot.reply_to(message, "❌ တရားဝင်သော numeric ID ကိုသာ ရိုက်ထည့်ပါ။")
+            session.state = None
+            return
 
-        # URL Input Configuration State
         if session.state == "waiting_for_url":
-            if text_data in ["🔗 ADD PORTAL URL", "📄 MY URLS", "⚙️ SETUP CONFIG MOD", "🚀 START SCAN", "📄 MY SUCCESS CODES", "🔑 ADMIN PANEL", "🔙 BACK TO MAIN", "🔙 BACK"]:
+            if text_data in ["🔗 ADD PORTAL URL", "📄 MY URLS", "⚙️ SETUP CONFIG MOD", "🚀 START SCAN", "📄 MY SUCCESS CODES", "🔑 ADMIN PANEL", "🔙 BACK TO MAIN"]:
                 session.state = None
             else:
                 if not (text_data.startswith("http://") or text_data.startswith("https://")):
@@ -525,7 +519,6 @@ async def handle_bot_inputs(message):
                 session.state = None
                 return
 
-        # Shop Details
         if text_data == "🛒 Access Key ဝယ်ယူရန်":
             text = (
                 "⚡ <b>Aladdin Code Hack Bot ဈေးနှုန်းများ</b> ⚡\n"
@@ -552,7 +545,8 @@ async def handle_bot_inputs(message):
         if not data_manager.is_authorized(user_id):
             await bot.reply_to(message, "❌ သင့်တွင် ဤ Bot အား သုံးခွင့်မရှိသေးပါ။ ပြေစာ ပေးပို့ပေးပါ။", reply_markup=get_unauth_keyboard())
             return
-        # Standard Navigation Handlers (Unauth Check အောက်တွင် ထည့်ထားသောကြောင့် လုံုံခြုံရေး ပိုစိတ်ချရပါသည်)
+
+        # --- STANDARD KEYBOARD NAVIGATION ---
         if text_data == "🔗 ADD PORTAL URL":
             session.state = "waiting_for_url"
             await bot.reply_to(message, "Please send the Portal URL you want to add.", reply_markup=get_user_keyboard(user_id))
@@ -582,4 +576,93 @@ async def handle_bot_inputs(message):
                     text += f"{i+1}. <code>{code}</code>\n"
 
                 markup = InlineKeyboardMarkup()
-                markup.row(InlineKeyboardButton(
+                markup.row(InlineKeyboardButton(text="🗑 CLEAR SUCCESS CODES (ဖျက်ပစ်ရန်)", callback_data="clear_success_codes"))
+            await bot.reply_to(message, text, reply_markup=markup, parse_mode="HTML")
+
+        elif text_data == "⚙️ SETUP CONFIG MOD":
+            markup = InlineKeyboardMarkup()
+            markup.row(InlineKeyboardButton(text="🔢 Numbers (0-8)", callback_data="set_m_num"))
+            markup.row(InlineKeyboardButton(text="🔤 Alpha (a-z)", callback_data="set_m_alpha"))
+            markup.row(InlineKeyboardButton(text="🔀 Mixed", callback_data="set_m_mixed"))
+            await bot.reply_to(message, "Select Character Set:", reply_markup=markup)
+
+        elif text_data == "🚀 START SCAN":
+            u_data = data_manager.get_user_data(user_id)
+            if not u_data["urls"]:
+                await bot.reply_to(message, "⚠️ Add at least one URL first!")
+                return
+
+            today_hits = data_manager.get_today_hits(user_id)
+            user_info = data_manager.get_user_info(user_id)
+            max_limit = user_info.get("daily_limit", 10)
+
+            if user_id != ADMIN_ID and today_hits >= max_limit:
+                await bot.reply_to(message, f"⚠️ ယနေ့အတွက် သတ်မှတ်ထားသော အမြင့်ဆုံး Limit ({max_limit}) ပြည့်သွားပါပြီ။")
+                return
+
+            if session.scan_task and not session.scan_task.done():
+                await bot.reply_to(message, "⚠️ Scanner is already running.")
+                return
+
+            session.reset_stats()
+            status_msg = await bot.reply_to(message, "🚀 Initializing Scanner Dashboard...", parse_mode="HTML")
+            session.status_msg_id = status_msg.message_id
+session.scan_task = asyncio.create_task(main_scanner_task(user_id))
+
+elif text_data == "🔑 ADMIN PANEL" and user_id == ADMIN_ID:
+    session.state = None
+    await bot.reply_to(
+        message,
+        "👑 WELCOME TO ADMIN MASTER SYSTEM",
+        reply_markup=get_admin_panel_keyboard(),
+        parse_mode="HTML"
+    )
+
+elif text_data == "👥 Admin ခွင့်ပြုပေးထားသော User များ" and user_id == ADMIN_ID:
+    users = data_manager.data["authorized_users"]
+
+    if not users:
+        await bot.reply_to(
+            message,
+            "လက်ရှိတွင် ခွင့်ပြုထားသော User မရှိသေးပါ။"
+        )
+        return
+
+    report = "👥 ခွင့်ပြုထားသော User စာရင်း-\n\n"
+
+    for uid, info in users.items():
+        report += f"• {uid} | {info.get('expiry')} | Limit: {info.get('daily_limit')} Hits\n"
+
+    await bot.reply_to(message, report, parse_mode="HTML")
+
+elif text_data == "🚫 ခွင့်ပြုထားသော user များအား ပယ်ဖျက်ရန်" and user_id == ADMIN_ID:
+    users = data_manager.data["authorized_users"]
+
+    if not users:
+        await bot.reply_to(
+            message,
+            "ပယ်ဖျက်ရန် User စာရင်း မရှိသေးပါ။"
+        )
+        return
+
+    report = "🚫 လက်ရှိအသုံးပြုနေသော User ID များ-\n\n"
+
+    for uid, info in users.items():
+        report += f"• {uid} ({info.get('expiry')})\n"
+
+    report += "\n━━━━━━━━━━━━━━━━━━━━━━━\n"
+    report += "✍️ ပယ်ဖျက်လိုပါက အောက်ပါအတိုင်း ID တစ်ခုတည်းကို သီးသန့် ရိုက်ပို့ပေးပါ-\n"
+    report += "ဥပမာ - 685224104"
+
+    session.state = "waiting_for_ban_id"
+
+    await bot.reply_to(message, report, parse_mode="HTML")
+
+elif text_data in ["🔙 BACK TO MAIN", "🔙 BACK"]:
+    session.state = None
+
+    await bot.reply_to(
+        message,
+        "Main Menu သို့ ပြန်ရောက်ပါပြီ။",
+        reply_markup=get_user_keyboard(user_id)
+    )
