@@ -15,8 +15,8 @@ from telebot.async_telebot import AsyncTeleBot
 from telebot.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 
 # ---------------------- CONFIGURATION ----------------------
-BOT_TOKEN = "6658845504:8824622648:AAHV1DiDPcONd93dKPrhSoIMi0iKcJ_vbHo"
-ADMIN_ID = "6658845504"
+BOT_TOKEN = "8824622648:AAHV1DiDPcONd93dKPrhSoIMi0iKcJ_vbHo"
+ADMIN_ID = 6658845504
 DATA_FILE = "bot_data.json"
 
 # Scanner Limits
