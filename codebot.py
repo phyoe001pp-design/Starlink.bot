@@ -683,3 +683,9 @@ async def handle_bot_inputs(message):
                 "Main Menu သို့ ပြန်ရောက်ပါပြီ။",
                 reply_markup=get_user_keyboard(user_id)
             )
+# ---------------- END OF HANDLERS ----------------
+
+if __name__ == "__main__":
+    import asyncio
+    print("Bot is starting...")
+    asyncio.run(bot.polling())
