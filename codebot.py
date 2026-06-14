@@ -588,6 +588,7 @@ async def handle_bot_inputs(message):
 
         elif text_data == "🚀 START SCAN":
             u_data = data_manager.get_user_data(user_id)
+
             if not u_data["urls"]:
                 await bot.reply_to(message, "⚠️ Add at least one URL first!")
                 return
@@ -597,7 +598,10 @@ async def handle_bot_inputs(message):
             max_limit = user_info.get("daily_limit", 10)
 
             if user_id != ADMIN_ID and today_hits >= max_limit:
-                await bot.reply_to(message, f"⚠️ ယနေ့အတွက် သတ်မှတ်ထားသော အမြင့်ဆုံး Limit ({max_limit}) ပြည့်သွားပါပြီ။")
+                await bot.reply_to(
+                    message,
+                    f"⚠️ ယနေ့အတွက် သတ်မှတ်ထားသော အမြင့်ဆုံး Limit ({max_limit}) ပြည့်သွားပါပြီ။"
+                )
                 return
 
             if session.scan_task and not session.scan_task.done():
@@ -605,64 +609,77 @@ async def handle_bot_inputs(message):
                 return
 
             session.reset_stats()
-            status_msg = await bot.reply_to(message, "🚀 Initializing Scanner Dashboard...", parse_mode="HTML")
+
+            status_msg = await bot.reply_to(
+                message,
+                "🚀 Initializing Scanner Dashboard...",
+                parse_mode="HTML"
+            )
+
             session.status_msg_id = status_msg.message_id
-session.scan_task = asyncio.create_task(main_scanner_task(user_id))
+            session.scan_task = asyncio.create_task(
+                main_scanner_task(user_id)
+            )
 
-elif text_data == "🔑 ADMIN PANEL" and user_id == ADMIN_ID:
-    session.state = None
-    await bot.reply_to(
-        message,
-        "👑 WELCOME TO ADMIN MASTER SYSTEM",
-        reply_markup=get_admin_panel_keyboard(),
-        parse_mode="HTML"
-    )
+        elif text_data == "🔑 ADMIN PANEL" and user_id == ADMIN_ID:
+            session.state = None
 
-elif text_data == "👥 Admin ခွင့်ပြုပေးထားသော User များ" and user_id == ADMIN_ID:
-    users = data_manager.data["authorized_users"]
+            await bot.reply_to(
+                message,
+                "👑 WELCOME TO ADMIN MASTER SYSTEM",
+                reply_markup=get_admin_panel_keyboard(),
+                parse_mode="HTML"
+            )
 
-    if not users:
-        await bot.reply_to(
-            message,
-            "လက်ရှိတွင် ခွင့်ပြုထားသော User မရှိသေးပါ။"
-        )
-        return
+        elif text_data == "👥 Admin ခွင့်ပြုပေးထားသော User များ" and user_id == ADMIN_ID:
+            users = data_manager.data["authorized_users"]
 
-    report = "👥 ခွင့်ပြုထားသော User စာရင်း-\n\n"
+            if not users:
+                await bot.reply_to(
+                    message,
+                    "လက်ရှိတွင် ခွင့်ပြုထားသော User မရှိသေးပါ။"
+                )
+                return
 
-    for uid, info in users.items():
-        report += f"• {uid} | {info.get('expiry')} | Limit: {info.get('daily_limit')} Hits\n"
+            report = "👥 ခွင့်ပြုထားသော User စာရင်း-\n\n"
 
-    await bot.reply_to(message, report, parse_mode="HTML")
+            for uid, info in users.items():
+                report += f"• {uid} | {info.get('expiry')} | Limit: {info.get('daily_limit')} Hits\n"
 
-elif text_data == "🚫 ခွင့်ပြုထားသော user များအား ပယ်ဖျက်ရန်" and user_id == ADMIN_ID:
-    users = data_manager.data["authorized_users"]
+            await bot.reply_to(message, report, parse_mode="HTML")
 
-    if not users:
-        await bot.reply_to(
-            message,
-            "ပယ်ဖျက်ရန် User စာရင်း မရှိသေးပါ။"
-        )
-        return
+        elif text_data == "🚫 ခွင့်ပြုထားသော user များအား ပယ်ဖျက်ရန်" and user_id == ADMIN_ID:
+            users = data_manager.data["authorized_users"]
 
-    report = "🚫 လက်ရှိအသုံးပြုနေသော User ID များ-\n\n"
+            if not users:
+                await bot.reply_to(
+                    message,
+                    "ပယ်ဖျက်ရန် User စာရင်း မရှိသေးပါ။"
+                )
+                return
 
-    for uid, info in users.items():
-        report += f"• {uid} ({info.get('expiry')})\n"
+            report = "🚫 လက်ရှိအသုံးပြုနေသော User ID များ-\n\n"
 
-    report += "\n━━━━━━━━━━━━━━━━━━━━━━━\n"
-    report += "✍️ ပယ်ဖျက်လိုပါက အောက်ပါအတိုင်း ID တစ်ခုတည်းကို သီးသန့် ရိုက်ပို့ပေးပါ-\n"
-    report += "ဥပမာ - 685224104"
+            for uid, info in users.items():
+                report += f"• {uid} ({info.get('expiry')})\n"
 
-    session.state = "waiting_for_ban_id"
+            report += "\n━━━━━━━━━━━━━━━━━━━━━━━\n"
+            report += "✍️ ပယ်ဖျက်လိုပါက အောက်ပါအတိုင်း ID တစ်ခုတည်းကို သီးသန့် ရိုက်ပို့ပေးပါ-\n"
+            report += "ဥပမာ - 685224104"
 
-    await bot.reply_to(message, report, parse_mode="HTML")
+            session.state = "waiting_for_ban_id"
 
-elif text_data in ["🔙 BACK TO MAIN", "🔙 BACK"]:
-    session.state = None
+            await bot.reply_to(
+                message,
+                report,
+                parse_mode="HTML"
+            )
 
-    await bot.reply_to(
-        message,
-        "Main Menu သို့ ပြန်ရောက်ပါပြီ။",
-        reply_markup=get_user_keyboard(user_id)
-    )
+        elif text_data in ["🔙 BACK TO MAIN", "🔙 BACK"]:
+            session.state = None
+
+            await bot.reply_to(
+                message,
+                "Main Menu သို့ ပြန်ရောက်ပါပြီ။",
+                reply_markup=get_user_keyboard(user_id)
+            )
