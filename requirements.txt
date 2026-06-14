@@ -1,6 +1,1 @@
-aiohttp
-requests
-pycryptodome
-ping3
-ntplib
-pyTelegramBotAPI
+pip install pyTelegramBotAPI aiohttp python-dotenv apscheduler pycryptodome ping3 ntplib
