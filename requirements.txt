@@ -1,6 +1,3 @@
-aiohttp
-requests
+python-telegram-bot==20.8
+aiohttp==3.9.3
 pyTelegramBotAPI
-pycryptodome
-ntplib
-ping3
