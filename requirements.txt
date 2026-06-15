@@ -1,1 +1,6 @@
-pip install pyTelegramBotAPI aiohttp python-dotenv apscheduler pycryptodome ping3 ntplib
+aiohttp
+requests
+pyTelegramBotAPI
+pycryptodome
+ntplib
+ping3
