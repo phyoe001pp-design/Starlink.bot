@@ -1,19 +1,3 @@
-import os
-import asyncio
-from threading import Thread
-from flask import Flask
-
-# Flask server ဆောက်ခြင်း
-app = Flask('')
-
-@app.route('/')
-def home():
-    return "Bot is alive!"
-
-def run_flask():
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host='0.0.0.0', port=port)
-
 #!/usr/bin/env python3
 import os
 import re
@@ -36,8 +20,8 @@ ADMIN_ID = 6658845504
 DATA_FILE = "bot_data.json"
 
 # Scanner Limits
-PER_USER_CONCURRENCY = 150
-PER_SESSION_MAX = 50
+PER_USER_CONCURRENCY = 100
+PER_SESSION_MAX = 60
 TIMEOUT_SEC = 10
 
 # ---------------------- DATA PERSISTENCE ----------------------
@@ -722,23 +706,15 @@ async def cb_set_len(call):
     await bot.answer_callback_query(call.id, "Settings updated successfully!")
     await bot.edit_message_text("⚙️ <b>Config settings saved! Ready to scan.</b>", chat_id=call.message.chat.id, message_id=call.message.message_id, parse_mode="HTML")
 
-# ------------------------- STARTING THE PLATFORM -------------------------
-
+# ---------------------- STARTING THE PLATFORM ----------------------
 async def main():
     print("[*] Starting Premium Aladdin Code Hack Bot Platform...")
-    # Termux အတွက် ပိုမိုငြိမ်သက်စေရန် infinity_polling သို့ ပြောင်းလဲထားပါသည်
+    # Termux အတွက် ပိုမိုငြိမ်သက်စေရန် infinity_polling သို့ အပြီးသတ် ပြောင်းလဲထားပါသည်
     await bot.infinity_polling(timeout=60, request_timeout=300)
 
 if __name__ == "__main__":
     try:
-        # ၁။ ပထမဦးစွာ နောက်ကွယ်မှာ Flask Web Server ကို Thread နဲ့ အရင်ပတ်ထားမယ်
-        print("[*] Starting Flask Web Server for Render...")
-        Thread(target=run_flask, daemon=True).start()
-        
-        # ၂။ ပြီးမှ သင့်ရဲ့ Bot Main Function ကို ပတ်မယ်
         asyncio.run(main())
-        
     except KeyboardInterrupt:
         print("\n[!] Bot Closed Safely.")
         sys.exit(0)
-
