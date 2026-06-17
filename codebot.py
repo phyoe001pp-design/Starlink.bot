@@ -20,9 +20,9 @@ ADMIN_ID = 6658845504
 DATA_FILE = "bot_data.json"
 
 # Scanner Limits
-PER_USER_CONCURRENCY = 100
+PER_USER_CONCURRENCY = 30
 PER_SESSION_MAX = 60
-TIMEOUT_SEC = 10
+TIMEOUT_SEC = 20
 
 # ---------------------- DATA PERSISTENCE ----------------------
 class DataManager:
