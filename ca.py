@@ -24,7 +24,7 @@ captcha_state = {}
 retry_counts = {}
 session = None
 _connector = None
-CONCURRENCY = 200
+CONCURRENCY = 300
 _voucher_sem = None
 _start_time = time.monotonic()
 
