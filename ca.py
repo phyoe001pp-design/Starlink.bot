@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 BOT_TOKEN = '8545879694:AAHrZvFatoCxQl0NqBiuUEYHUTtCDuB9FZw'
-GITHUB_TOKEN='ghp_2VtASRWiKDwjPCqm9YKYpvjvOjcO1rm6K1'
+GITHUB_TOKEN='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'
 ADMIN_ID = "6658845504"
 REPO_OWNER = "phyoe001pp-design"
 REPO_NAME = "ID-Bot"
@@ -24,7 +24,7 @@ captcha_state = {}
 retry_counts = {}
 session = None
 _connector = None
-CONCURRENCY = 200
+CONCURRENCY = 170
 _voucher_sem = None
 _start_time = time.monotonic()
 
