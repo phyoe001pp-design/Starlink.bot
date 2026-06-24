@@ -7,7 +7,7 @@ import numpy as np
 from datetime import datetime, timedelta, timezone
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-BOT_TOKEN = '8378329018:AAGZtA9AEMOsfAAX4HuFvK046TQ0NguBgs0'
+BOT_TOKEN = '8545879694:AAHrZvFatoCxQl0NqBiuUEYHUTtCDuB9FZw'
 GITHUB_TOKEN='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'
 ADMIN_ID = "6658845504"
 REPO_OWNER = "phyoe001pp-design"
