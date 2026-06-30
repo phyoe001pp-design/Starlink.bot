@@ -94,7 +94,6 @@ def scan_mode_menu():
 
 @bot.message_handler(commands=['start'])
 async def start(message):
-    # No channel join check - removed
     await bot.reply_to(
         message,
         "🤖 Ruijie Voucher Bot\n\n"
@@ -1053,8 +1052,9 @@ async def Code_Expires_Date(session_id):
                 headers=headers
             ) as req:
                 respond = await req.json()
-                profile_name = respond.get('result', {}).get('profileName', 'Unknown')
-                totaltime = Minute_to_Hour(respond.get('result', {}).get('totalMinutes', 'Unknown'))
+                result = respond.get('result', {})
+                profile_name = result.get('profileName', 'Unknown')
+                totaltime = Minute_to_Hour(result.get('totalMinutes', 'Unknown'))
                 return f"📋 Plan: {profile_name} | ⏳ Time: {totaltime}"
     except Exception as e:
         print(f"[Code_Expires_Date] error: {e}")
