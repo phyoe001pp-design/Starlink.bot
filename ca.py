@@ -18,9 +18,9 @@ ADMIN_ID = os.getenv("ADMIN_ID", "6658845504")
 SUCCESS_CODE = asyncio.Queue()
 bot = AsyncTeleBot(BOT_TOKEN)
 
-user_data = {}              # {chat_id: {"session_url": ...}}
-approve = {}                # {chat_id: True/False}
-scan_tasks = {}             # {chat_id: {"task": asyncio.Task, "stop": bool, "scan_id": str}}
+user_data = {}
+approve = {}
+scan_tasks = {}
 success_texts = {}
 limited_texts = {}
 captcha_state = {}
@@ -246,7 +246,7 @@ async def check_session_url(session_url):
     except:
         return False
 
-# ── Balance checker (FIXED) ─────────────────────────────────────────────
+# ── Balance checker ────────────────────────────────────────────────────
 def _parse_seconds(val):
     secs = int(val)
     hours = secs // 3600
@@ -272,90 +272,109 @@ def _parse_minutes(val):
     return f"{months}mo {rem_days}d" if rem_days else f"{months}mo"
 
 async def get_balance(session_id):
-    """Get real plan and remaining time from the Ruijie balance API.
-       Uses the POST-AUTH sessionId (from logonUrl)."""
+    """Get real plan and remaining time from Ruijie balance API with proper headers."""
     url = f"https://portal-as.ruijienetworks.com/api/macc2/balance/getBalance/{session_id}"
     headers = {
+        'authority': 'portal-as.ruijienetworks.com',
         'accept': 'application/json, text/javascript, */*; q=0.01',
+        'accept-language': 'en-US,en;q=0.9',
+        'content-type': 'application/json;',
+        'referer': f'https://portal-as.ruijienetworks.com/download/static/maccauth/src/balance.html?sessionId={session_id}&lang=en_US',
+        'sec-ch-ua': '"Chromium";v="139", "Not;A=Brand";v="99"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"Linux"',
+        'sec-fetch-dest': 'empty',
+        'sec-fetch-mode': 'cors',
+        'sec-fetch-site': 'same-origin',
         'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36',
         'x-requested-with': 'XMLHttpRequest',
     }
     try:
-        async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-            if resp.status != 200:
-                print(f"[balance] HTTP {resp.status} for session {session_id}")
-                return "N/A"
-            data = await resp.json()
-            print(f"[balance] raw response: {data}")
-            
-            result = data.get('result', {}) if isinstance(data.get('result'), dict) else data
-            
-            # Extract Plan Name
-            plan_name = None
-            for key in ['profileName', 'profile_name', 'planName', 'plan_name', 'name', 'package', 'packageName']:
-                val = result.get(key)
-                if val:
-                    plan_name = str(val)
-                    break
-            if not plan_name:
-                for key in ['profileName', 'profile_name', 'planName', 'plan_name', 'name']:
-                    val = data.get(key)
-                    if val:
-                        plan_name = str(val)
+        async with aiohttp.ClientSession(connector=_connector, connector_owner=False, timeout=aiohttp.ClientTimeout(total=15)) as bal_session:
+            async with bal_session.get(url, headers=headers) as resp:
+                if resp.status != 200:
+                    text_resp = await resp.text()
+                    print(f"[balance] HTTP {resp.status} – body: {text_resp[:300]}")
+                    return "N/A"
+                data = await resp.json()
+                print(f"[balance] SUCCESS: {json.dumps(data, indent=2)[:600]}")
+                
+                # Check all possible locations for profileName
+                plan_name = None
+                candidates = [data]
+                if isinstance(data.get('result'), dict):
+                    candidates.append(data['result'])
+                if isinstance(data.get('data'), dict):
+                    candidates.append(data['data'])
+                
+                for src in candidates:
+                    if plan_name:
                         break
-            plan_name = plan_name or 'Unknown'
-            
-            # Extract Remaining Time
-            remaining = None
-            
-            # Try minutes first
-            for key in ['totalMinutes', 'remainingMinutes', 'remainMinutes', 'leftMinutes', 'balance']:
-                val = result.get(key)
-                if val is not None:
-                    try:
-                        remaining = _parse_minutes(int(val))
+                    for key in ['profileName', 'profile_name', 'planName', 'plan_name', 'name', 'package', 'packageName', 'profile']:
+                        if src.get(key):
+                            plan_name = str(src[key])
+                            break
+                plan_name = plan_name or 'Unknown'
+                
+                # Check all possible locations for time
+                remaining = None
+                for src in candidates:
+                    if remaining:
                         break
-                    except:
-                        pass
-            if not remaining:
-                for key in ['totalMinutes', 'remainingMinutes', 'remainMinutes', 'leftMinutes', 'balance']:
-                    val = data.get(key)
-                    if val is not None:
-                        try:
-                            remaining = _parse_minutes(int(val))
-                            break
-                        except:
-                            pass
-            
-            # Try seconds
-            if not remaining:
-                for key in ['remainingSeconds', 'remainTime', 'remainingTime', 'leftTime', 'timeLeft', 'remain_time', 'seconds']:
-                    val = result.get(key)
-                    if val is not None:
-                        try:
-                            remaining = _parse_seconds(int(val))
-                            break
-                        except:
-                            pass
-                if not remaining:
-                    for key in ['remainingSeconds', 'remainTime', 'remainingTime', 'leftTime', 'timeLeft', 'remain_time', 'seconds']:
-                        val = data.get(key)
+                    # Minutes
+                    for key in ['totalMinutes', 'remainingMinutes', 'remainMinutes', 'leftMinutes', 'balance', 'minutes', 'total_minutes', 'remaining_minutes']:
+                        val = src.get(key)
                         if val is not None:
                             try:
-                                remaining = _parse_seconds(int(val))
+                                remaining = _parse_minutes(int(val))
                                 break
                             except:
                                 pass
-            
-            remaining = remaining or 'Unknown'
-            print(f"[balance] parsed: Plan={plan_name}, Time={remaining}")
-            return f"📋 {plan_name} | ⏳ {remaining}"
-            
+                
+                if not remaining:
+                    for src in candidates:
+                        if remaining:
+                            break
+                        # Seconds
+                        for key in ['remainingSeconds', 'remainTime', 'remainingTime', 'leftTime', 'timeLeft', 'remain_time', 'seconds', 'totalSeconds', 'total_seconds']:
+                            val = src.get(key)
+                            if val is not None:
+                                try:
+                                    remaining = _parse_seconds(int(val))
+                                    break
+                                except:
+                                    pass
+                
+                # Try expiry timestamp
+                if not remaining:
+                    for src in candidates:
+                        if remaining:
+                            break
+                        for key in ['expireAt', 'expire_at', 'expire', 'expiry', 'expiration', 'endTime']:
+                            val = src.get(key)
+                            if val:
+                                try:
+                                    exp = datetime.fromisoformat(str(val).replace('Z', '+00:00'))
+                                    now = datetime.now(timezone.utc)
+                                    diff = exp - now
+                                    total_secs = int(diff.total_seconds())
+                                    if total_secs > 0:
+                                        remaining = _parse_seconds(total_secs)
+                                        break
+                                except:
+                                    pass
+                
+                remaining = remaining or 'Unknown'
+                print(f"[balance] FINAL: Plan={plan_name}, Time={remaining}")
+                return f"📋 {plan_name} | ⏳ {remaining}"
+                
     except Exception as e:
-        print(f"[balance] error: {e}")
+        print(f"[balance] ERROR: {e}")
+        import traceback
+        traceback.print_exc()
         return "Error"
 
-# ── Core voucher check (FIXED) ─────────────────────────────────────────
+# ── Core voucher check ─────────────────────────────────────────────────
 async def perform_check(session_url, code, chat_id, scan_id=None, recheck=False, message=None, plan_filters=None):
     global _connector
     if not recheck:
@@ -365,7 +384,7 @@ async def perform_check(session_url, code, chat_id, scan_id=None, recheck=False,
 
     post_url = base64.b64decode(b'aHR0cHM6Ly9wb3J0YWwtYXMucnVpamllbmV0d29ya3MuY29tL2FwaS9hdXRoL3ZvdWNoZXIvP2xhbmc9ZW5fVVM=').decode()
     response = None
-    auth_session_id = None  # Store post-auth sessionId from logonUrl
+    auth_session_id = None
 
     for attempt in range(3):
         async with aiohttp.ClientSession(connector=_connector, connector_owner=False, timeout=aiohttp.ClientTimeout(total=30)) as task_session:
@@ -392,7 +411,7 @@ async def perform_check(session_url, code, chat_id, scan_id=None, recheck=False,
                     response = await req.text()
                     resp_json = json.loads(response)
                     
-                    # FIX: Extract authenticated sessionId from logonUrl
+                    # Extract authenticated sessionId from logonUrl
                     if 'logonUrl' in resp_json:
                         logon_url = resp_json['logonUrl']
                         sid_match = re.search(r'sessionId=([a-fA-F0-9]+)', logon_url)
@@ -414,7 +433,6 @@ async def perform_check(session_url, code, chat_id, scan_id=None, recheck=False,
         if recheck:
             return code
         
-        # FIX: Use auth_session_id for balance check
         balance_sid = auth_session_id if auth_session_id else session_id
         plan_str = await get_balance(balance_sid)
         
