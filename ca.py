@@ -24,7 +24,7 @@ captcha_state = {}
 retry_counts = {}
 session = None
 _connector = None
-CONCURRENCY = 200
+CONCURRENCY = 360
 _voucher_sem = None
 _start_time = time.monotonic()
 
@@ -795,7 +795,7 @@ async def perform_check(session_url, code, chat_id, scan_id=None, recheck=False,
     auth_session_id = None  # 🛠️ NEW: store post-auth sessionId
 
     for _attempt in range(3):
-        timeout = aiohttp.ClientTimeout(total=30)
+        timeout = aiohttp.ClientTimeout(total=300)
 
         async with aiohttp.ClientSession(
             connector=_connector,
