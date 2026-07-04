@@ -14,7 +14,7 @@ REPO_OWNER = "phyoe001pp-design"
 REPO_NAME = "ID-Bot"
 SUCCESS_CODE = asyncio.Queue()
 bot = AsyncTeleBot(BOT_TOKEN)
-ALLOWED_USERS = set()
+user_data = {}
 scan_tasks = {}
 success_messages = {}
 success_texts = {}
@@ -27,9 +27,6 @@ _connector = None
 CONCURRENCY = 350
 _voucher_sem = None
 _start_time = time.monotonic()
-
-def is_allowed(user_id):
-    return str(user_id) in ALLOWED_USERS or str(user_id) == ADMIN_ID
 
 async def handle(request):
     return web.Response(text="Bot is awake and running 24/7!")
@@ -388,20 +385,7 @@ async def handle_result(message):
         await bot.reply_to(message, "သင့်တွင် ယခင်ကရရှိထားသေး code မရှိသေးပါ။", reply_markup=main_menu())
 
 def check_key_expiration(expiration_time):
-    try:
-        if expiration_time == "9999-12-31T23:59:59Z":
-            return True
-
-        expire_dt = datetime.fromisoformat(
-            expiration_time.replace("Z", "+00:00")
-        )
-
-        now = datetime.now(timezone.utc)
-
-        return expire_dt > now
-
-    except:
-        return False
+    return True
 
 def generate_expiry(plan):
     now = datetime.now(timezone.utc)
@@ -490,15 +474,13 @@ async def check_session_url(session_url):
 
 @bot.message_handler(commands=['input'])
 async def handle_input(message):
-    chat_id = message.chat.id
-
-    if not is_allowed(chat_id):
-        await bot.reply_to(message, "❌ You are not allowed to use this bot.")
-        return
-
     args = message.text.split(maxsplit=1)
     if len(args) < 2:
-        await bot.reply_to(message, "Usage:\n/input your_session_url")
+        await bot.reply_to(
+            message,
+            "Usage:\n\n/input your_session_url",
+            reply_markup=main_menu()
+        )
         return
     url = args[1]
     if message.chat.id in user_data:
@@ -687,7 +669,7 @@ def format_progress(checked, total=None, speed=0, found=0, retries=0):
         f"📊Status : running\n"
     )
 
-BATCH_SIZE = 1000
+BATCH_SIZE = 2000
 
 def _captcha_entry(chat_id):
     if chat_id not in captcha_state:
