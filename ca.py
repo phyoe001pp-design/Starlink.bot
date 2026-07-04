@@ -6,100 +6,15 @@ import ddddocr
 import numpy as np
 from datetime import datetime, timedelta, timezone
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
-import json
-from datetime import datetime, timezone
-from datetime import timedelta
 
 BOT_TOKEN = '8947878806:AAG1GmhB_jrARQ4LwO7pzKJV2UdbHC7_A1I'
-GITHUB_TOKEN = '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'
+GITHUB_TOKEN='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'
 ADMIN_ID = "6658845504"
-USERS_FILE = "users.json"
-# ================= RBAC SYSTEM =================
-
-def load_users():
-    try:
-        with open(USERS_FILE, "r") as f:
-            return json.load(f)
-    except:
-        return {}
-
-def save_users(data):
-    with open(USERS_FILE, "w") as f:
-        json.dump(data, f, indent=2)
-
-def is_expired(expires_at):
-    if expires_at == "9999-12-31T23:59:59Z":
-        return False
-    try:
-        return datetime.fromisoformat(expires_at.replace("Z", "+00:00")) < datetime.now(timezone.utc)
-    except:
-        return True
-
-def get_user(user_id):
-    users = load_users()
-    return users.get(str(user_id))
-
-def has_access(user_id):
-    user = get_user(user_id)
-    if not user:
-        return False
-
-    if user.get("status") != "active":
-        return False
-
-    if is_expired(user.get("expires_at", "")):
-        return False
-
-    return True
-
-def is_admin(user_id):
-    # fallback admin ID check
-    if str(user_id) == ADMIN_ID:
-        return True
-
-    user = get_user(user_id)
-    return user and user.get("role") == "admin"
-    @bot.message_handler(commands=['ban'])
-@require_admin
-async def ban_user(message):
-    args = message.text.split()
-    if len(args) < 2:
-        return
-
-    user_id = args[1]
-    users = load_users()
-
-    if user_id in users:
-        users[user_id]["status"] = "banned"
-        save_users(users)
-
-    await bot.reply_to(message, f"⛔ Banned {user_id}")
-    
-    @bot.message_handler(commands=['start'])
-async def start(message):
-    if not has_access(message.chat.id):
-        await bot.reply_to(message, "❌ No access. Contact admin.")
-        return
-
-    await bot.reply_to(message, "✅ Welcome! You are approved.")
-    
-    @bot.message_handler(commands=['status'])
-@require_admin
-async def status(message):
-    users = load_users()
-    total = len(users)
-    active = sum(1 for u in users.values() if u["status"] == "active")
-
-    await bot.reply_to(
-        message,
-        f"📊 Bot Status\nUsers: {total}\nActive: {active}"
-    )
-    
-REPO_OWNER = "zarni1mobile122005-sudo"
+REPO_OWNER = "phyoe001pp-design"
 REPO_NAME = "ID-Bot"
 SUCCESS_CODE = asyncio.Queue()
 bot = AsyncTeleBot(BOT_TOKEN)
-user_data = {}
+ALLOWED_USERS = set()
 scan_tasks = {}
 success_messages = {}
 success_texts = {}
@@ -109,9 +24,12 @@ captcha_state = {}
 retry_counts = {}
 session = None
 _connector = None
-CONCURRENCY = 250
+CONCURRENCY = 350
 _voucher_sem = None
 _start_time = time.monotonic()
+
+def is_allowed(user_id):
+    return str(user_id) in ALLOWED_USERS or str(user_id) == ADMIN_ID
 
 async def handle(request):
     return web.Response(text="Bot is awake and running 24/7!")
@@ -470,7 +388,20 @@ async def handle_result(message):
         await bot.reply_to(message, "သင့်တွင် ယခင်ကရရှိထားသေး code မရှိသေးပါ။", reply_markup=main_menu())
 
 def check_key_expiration(expiration_time):
-    return True
+    try:
+        if expiration_time == "9999-12-31T23:59:59Z":
+            return True
+
+        expire_dt = datetime.fromisoformat(
+            expiration_time.replace("Z", "+00:00")
+        )
+
+        now = datetime.now(timezone.utc)
+
+        return expire_dt > now
+
+    except:
+        return False
 
 def generate_expiry(plan):
     now = datetime.now(timezone.utc)
@@ -559,13 +490,15 @@ async def check_session_url(session_url):
 
 @bot.message_handler(commands=['input'])
 async def handle_input(message):
+    chat_id = message.chat.id
+
+    if not is_allowed(chat_id):
+        await bot.reply_to(message, "❌ You are not allowed to use this bot.")
+        return
+
     args = message.text.split(maxsplit=1)
     if len(args) < 2:
-        await bot.reply_to(
-            message,
-            "Usage:\n\n/input your_session_url",
-            reply_markup=main_menu()
-        )
+        await bot.reply_to(message, "Usage:\n/input your_session_url")
         return
     url = args[1]
     if message.chat.id in user_data:
@@ -636,26 +569,17 @@ async def scan(message, mode=None):
 
 @bot.message_handler(commands=['status'])
 async def status(message):
-
-    if not has_access(message.chat.id):
-        await bot.reply_to(message, "❌ No access")
-        return
-
     if str(message.chat.id) != ADMIN_ID:
         await bot.reply_to(message, "No Permission", reply_markup=main_menu())
         return
-
     active_scans = sum(
         1 for data in scan_tasks.values()
         if not data["task"].done()
     )
-
     approved_users = len(user_data)
     uptime_seconds = int(time.monotonic() - _start_time)
-
     hours, remainder = divmod(uptime_seconds, 3600)
     minutes, seconds = divmod(remainder, 60)
-
     await bot.reply_to(
         message,
         f"📊 Bot Status\n\n"
@@ -763,7 +687,7 @@ def format_progress(checked, total=None, speed=0, found=0, retries=0):
         f"📊Status : running\n"
     )
 
-BATCH_SIZE = 2000
+BATCH_SIZE = 1000
 
 def _captcha_entry(chat_id):
     if chat_id not in captcha_state:
