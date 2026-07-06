@@ -3,4 +3,5 @@ aiohttp
 opencv-python
 ddddocr
 numpy
-asyncio
+pillow
+python-dotenv
