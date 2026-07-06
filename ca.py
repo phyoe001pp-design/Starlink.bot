@@ -17,7 +17,7 @@ from telebot.async_telebot import AsyncTeleBot
 from aiohttp import web
 
 # ========== CONFIG ==========
-BOT_TOKEN = os.environ.get('BOT_TOKEN', '8947878806:AAE5Op8nDyAEtCqQDz5GvdAV5nHPUaP40mQ')
+BOT_TOKEN = os.environ.get('BOT_TOKEN', '8963964708:AAEIGvzc_DQse8xoWpZlBxjWncATf6gFAPw')
 ADMIN_ID = int(os.environ.get('ADMIN_ID', '6658845504'))
 CHANNEL_ID = os.environ.get('CHANNEL_ID', '-5441041274')
 CHANNEL_LINK = os.environ.get('CHANNEL_LINK', 'https://t.me/+qpuC-axFXb5iZDZl')
