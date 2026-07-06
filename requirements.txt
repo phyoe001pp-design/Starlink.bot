@@ -1,5 +1,5 @@
-pyTelegramBotAPI
+aiogram
 aiohttp
-opencv-python-headless
+opencv-python
 ddddocr
 numpy
