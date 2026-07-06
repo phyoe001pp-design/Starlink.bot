@@ -150,25 +150,27 @@ async def add_user(message):
     await bot.reply_to(message, f"✅ User `{target_id}` added {days} days.")
 
 @bot.message_handler(commands=['input'])
+@require_role(UserRole.USER)
 async def handle_input(message):
-    user_id = message.from_user.id
-    if not is_subscribed(user_id):
-        await bot.reply_to(message, "❌ Subscription သက်တမ်းကုန်ဆုံးနေပါသည်။")
-        return
     args = message.text.split(maxsplit=1)
     if len(args) < 2:
-        await bot.reply_to(message, "❌ *Usage:* `/input your_session_url`", parse_mode="Markdown")
+        await message.reply("အသုံးပြုနည်း: /input your_session_url")
         return
-    url = args[1].strip()
-    chat_id = message.chat.id
-    if chat_id not in user_data:
-        user_data[chat_id] = {}
-    if await check_session_url(session_url=url):
-        user_data[chat_id]['session_url'] = url
-        await bot.reply_to(message, "✅ *Session URL saved!*", parse_mode="Markdown")
-    else:
-        await bot.reply_to(message, "❌ *Invalid Session URL!*", parse_mode="Markdown")
 
+    url = args[1].strip()
+
+    parsed = parse_session_url(url)
+    if not parsed:
+        await message.reply(
+            "Session URL မမှန်ပါ။ gw_id, gw_address, gw_port, mac, ip ပါရမည်။"
+        )
+        return
+
+    user_id = message.from_user.id
+    user_session[user_id] = url
+
+    await message.reply("✅ Session URL သိမ်းဆည်းပြီးပါပြီ။ /brute ဖြင့် စတင်ပါ။")
+    
 @bot.message_handler(commands=['scan'])
 async def scan(message):
     user_id = message.from_user.id
