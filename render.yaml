@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: starlink-bot
+    env: docker
+    plan: free
+    region: singapore
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+        placeholder: "Enter your Telegram Bot Token"
+      - key: ADMIN_ID
+        value: "6658845504"
+      - key: BOT_PORT
+        value: 8099
