@@ -6,7 +6,7 @@ import ddddocr
 import numpy as np
 from datetime import datetime, timedelta, timezone
 
-BOT_TOKEN = '8963964708:AAEIGvzc_DQse8xoWpZlBxjWncATf6gFAPw'
+BOT_TOKEN = '8963964708:AAFAUB_89K8q0Uh7bUbEb11dl8HtsII-m3I'
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
 ADMIN_ID = "6658845504"
 REPO_OWNER = "Waihlyanhtet"
