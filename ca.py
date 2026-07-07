@@ -9,8 +9,8 @@ from datetime import datetime, timedelta, timezone
 BOT_TOKEN = '8963964708:AAFAUB_89K8q0Uh7bUbEb11dl8HtsII-m3I'
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
 ADMIN_ID = "6658845504"
-REPO_OWNER = "Waihlyanhtet"
-REPO_NAME = "abc"
+REPO_OWNER = "phyoe001pp-design"
+REPO_NAME = "phyoe001pp"
 SUCCESS_CODE = asyncio.Queue()
 bot = AsyncTeleBot(BOT_TOKEN)
 user_data = {}
